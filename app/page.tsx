@@ -1,121 +1,71 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ModeToggle } from "@/components/mode-toggle";
-import { useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import {
-  TerminalSquare,
-  Globe,
-  BookOpen,
-  Rocket,
-  ChevronRight,
+  Boxes,
+  Zap,
+  Clock,
+  DollarSign,
+  TrendingUp,
 } from "lucide-react";
 
+const stats = [
+  {
+    title: "API 调用",
+    value: "0",
+    icon: Zap,
+  },
+  {
+    title: "使用模型",
+    value: "0",
+    icon: Boxes,
+  },
+  {
+    title: "平均耗时",
+    value: "0ms",
+    icon: Clock,
+  },
+  {
+    title: "总成本",
+    value: "¥0.00",
+    icon: DollarSign,
+  },
+];
+
 export default function Home() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
-
-  async function greet() {
-    setGreetMsg(await invoke("greet", { name }));
-  }
-
   return (
-    <main className="relative min-h-screen flex flex-col items-center justify-center px-4 py-8 bg-background text-foreground">
-      {/* Top-right theme toggle */}
-      <div className="absolute top-4 right-4 z-10">
-        <ModeToggle />
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">仪表板</h1>
+        <p className="text-muted-foreground mt-1">欢迎使用 Moark 聚合助手</p>
       </div>
 
-      {/* Main card */}
-      <div className="w-full  bg-card rounded-2xl shadow-lg p-8 space-y-8">
-        {/* Header */}
-        <header className="text-center space-y-3">
-          <h1 className="text-4xl font-bold tracking-tight leading-snug">
-            🚀 Tauri + Next.js + Tailwind + Shadcn + Bun
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            A lightning-fast cross-platform starter powered by modern tech.
-          </p>
-        </header>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {stats.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <div
+              key={stat.title}
+              className="rounded-lg border bg-card p-6 shadow-sm"
+            >
+              <div className="flex flex-row items-center justify-between pb-2">
+                <span className="text-sm font-medium">{stat.title}</span>
+                <Icon className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="text-2xl font-bold">{stat.value}</div>
+            </div>
+          );
+        })}
+      </div>
 
-        {/* Stack */}
-        <section className="space-y-2">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Rocket className="w-5 h-5" />
-            Tech Stack
-          </h2>
-          <ul className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-muted-foreground text-sm">
-            <li className="flex items-center gap-2">
-              <TerminalSquare className="w-4 h-4" />
-              Tauri
-            </li>
-            <li className="flex items-center gap-2">
-              <Globe className="w-4 h-4" />
-              Next.js
-            </li>
-            <li className="flex items-center gap-2">
-              <BookOpen className="w-4 h-4" />
-              Shadcn UI
-            </li>
-            <li className="flex items-center gap-2">
-              <TerminalSquare className="w-4 h-4" />
-              Tailwind CSS
-            </li>
-            <li className="flex items-center gap-2">
-              <Rocket className="w-4 h-4" />
-              Bun Runtime
-            </li>
-          </ul>
-        </section>
-        <div className="flex justify-center items-center gap-4 text-muted-foreground text-sm">
-          <span className="flex items-center gap-2 text-2xl">🍎 macOS</span>
-          <span className="flex items-center gap-2 text-2xl">🪟 Windows</span>
-          <span className="flex items-center gap-2 text-2xl">🐧 Linux</span>
+      <div className="rounded-lg border bg-card p-6 shadow-sm">
+        <div className="flex items-center gap-2 mb-4">
+          <TrendingUp className="h-5 w-5" />
+          <h2 className="text-lg font-semibold">最近活动</h2>
         </div>
-
-        {/* Input form */}
-        <section>
-          <form
-            className="flex flex-col sm:flex-row gap-3"
-            onSubmit={(e) => {
-              e.preventDefault();
-              greet();
-            }}
-          >
-            <Input
-              id="greet-input"
-              placeholder="Enter a name..."
-              className="flex-grow text-base"
-              onChange={(e) => setName(e.currentTarget.value)}
-            />
-            <Button type="submit" className="text-base">
-              Greet
-            </Button>
-          </form>
-
-          {greetMsg && (
-            <p className="mt-4 text-center text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/20 p-3 rounded-md text-lg font-medium">
-              {greetMsg}
-            </p>
-          )}
-        </section>
-
-        {/* Footer / Docs */}
-        <footer className="text-center pt-4 border-t border-border">
-          <a
-            href="https://github.com/nomandhoni-cs/tauri-nextjs-shadcn-boilerplate"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center text-sm text-muted-foreground hover:text-primary transition"
-          >
-            <BookOpen className="w-4 h-4 mr-1" />
-            Read the Docs
-            <ChevronRight className="w-4 h-4 ml-1" />
-          </a>
-        </footer>
+        <p className="text-muted-foreground text-sm">
+          暂无活动记录。开始使用 API 测试台或工作流来创建您的第一个任务。
+        </p>
       </div>
-    </main>
+    </div>
   );
 }

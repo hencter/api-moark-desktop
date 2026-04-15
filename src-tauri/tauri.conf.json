@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "tauri-nextjs-shadcn-boilerplate",
-  "version": "0.1.0",
-  "identifier": "com.tauri-nextjs-shadcn-boilerplate.dev",
+  "productName": "Moark聚合助手",
+  "version": "1.0.0",
+  "identifier": "com.moark.desktop",
   "build": {
     "frontendDist": "../out",
     "devUrl": "http://localhost:3000",
@@ -12,26 +12,41 @@
   "app": {
     "windows": [
       {
-        "title": "tauri-nextjs-shadcn-boilerplate",
-        "width": 800,
-        "height": 600,
+        "title": "Moark聚合助手",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "center": true
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.moark.com https://*.moark.com"
     }
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis", "msi", "app", "dmg", "deb", "rpm"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
-  }
+    ],
+    "resources": [],
+    "externalBin": [],
+    "copyright": "© 2026 Moark聚合助手",
+    "category": "DeveloperTool",
+    "shortDescription": "Moark平台AI模型聚合桌面应用",
+    "longDescription": "一个本地优先的Moark平台AI模型聚合应用，支持工作流编排、批量处理和本地数据管理。",
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
+    }
+  },
+  "plugins": {}
 }
