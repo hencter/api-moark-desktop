@@ -319,12 +319,75 @@ You are a research expert...' > .opencode/agents/researcher.md
 
 ---
 
-## 📦 内置 Skills (.opencode/skills/)
+## 📦 项目 Skills (.opencode/skills/)
 
 | Skill | 说明 |
 |-------|------|
+| ui-ux-pro-max | UI/UX 设计规范（50+样式、161配色、57字体配对） |
 | pua | 高能动性压力模式，自动加载 |
+| semver | 语义化版本管理规范 |
+
+> 项目已本地化 skills，存储于 `.opencode/skills/` 目录。
 
 ---
 
-*最后更新：2026-04-07*
+## 🏷️ 版本管理规范 (Semantic Versioning)
+
+项目严格遵循 [SemVer 2.0.0](.opencode/skills/SEMVER.md) 规范。
+
+### 版本号格式
+
+```
+MAJOR.MINOR.PATCH[-prerelease][+build]
+例如: 1.0.0, 2.1.0-beta.1, 1.0.0+build.001
+```
+
+### 版本递增规则
+
+| 变更类型 | 递增范围 | 示例 |
+|----------|----------|------|
+| 破坏性 API 变更 | **MAJOR** | 1.0.0 → 2.0.0 |
+| 新增功能（向后兼容） | **MINOR** | 1.0.0 → 1.1.0 |
+| Bug 修复（向后兼容） | **PATCH** | 1.0.0 → 1.0.1 |
+| 弃用功能 | **MINOR** | 1.0.0 → 1.1.0 |
+
+### 版本发布工作流
+
+1. **开发阶段** (0.y.z)：初始开发，API 不稳定
+2. **测试阶段** (x.y.z-alpha/beta/rc)：测试版本
+3. **正式发布** (x.0.0)：稳定版本
+
+### 代码提交规范
+
+使用 [Conventional Commits](https://www.conventionalcommits.org/) 格式：
+
+```
+<type>(<scope>): <description>
+
+# 示例
+feat(dashboard): 添加用户统计卡片
+fix(api): 修复 API 超时问题
+docs(readme): 更新安装说明
+```
+
+**type 类型**：
+- `feat`: 新功能 (MINOR)
+- `fix`: Bug 修复 (PATCH)
+- `perf`: 性能优化 (MINOR/PATCH)
+- `docs`: 文档变更
+- `refactor`: 重构（不产生新功能）
+- `BREAKING CHANGE`: 破坏性变更 (MAJOR)
+
+### Git Tag 管理
+
+```bash
+# 创建版本标签
+git tag -a v1.0.0 -m "Release version 1.0.0"
+
+# 查看标签
+git tag -l
+```
+
+---
+
+*最后更新： 2026-04-15*
