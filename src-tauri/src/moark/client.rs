@@ -2,6 +2,7 @@ use std::pin::Pin;
 use reqwest::Client;
 use serde_json::Value;
 use thiserror::Error;
+use futures_util::StreamExt;
 
 use super::models::{ChatRequest, ChatResponse, ImageRequest, ImageResponse};
 
@@ -75,13 +76,10 @@ impl MoarkClient {
             .map_err(|e| MoarkError::ParseError(e.to_string()))
     }
 
-#[cfg(feature = "stream")]
     pub async fn chat_completions_stream(
         &self,
         request: &ChatRequest,
-    ) -> Result<tokio_stream::StreamItem<'static, Result<Value, MoarkError>>> {
-        use futures_util::StreamExt;
-        
+    ) -> Result<Pin<Box<dyn futures_util::Stream<Item = std::result::Result<Value, MoarkError>> + Send>>> {
         let url = format!("{}/chat/completions", self.base_url);
         
         let response = self.client
@@ -101,35 +99,35 @@ impl MoarkClient {
 
         let byte_stream = response.bytes_stream();
         
-        let stream = tokio_stream::iter(byte_stream.map(|chunk| {
-            match chunk {
-                Ok(bytes) => {
-                    if let Ok(text) = String::from_utf8(bytes.to_vec()) {
-                        let mut buffer = text;
-                        while let Some(newline_pos) = buffer.find('\n') {
-                            let line = buffer.drain(..newline_pos + 1).collect::<String>();
-                            let line = line.trim();
-                            
-                            if line.starts_with("data: ") {
-                                let data = line.strip_prefix("data: ").unwrap_or("");
-                                
-                                if data == "[DONE]" {
-                                    continue;
-                                }
-                                
-                                if let Ok(value) = serde_json::from_str::<Value>(data) {
-                                    return Some(Ok(value));
+        let stream = async_stream::stream! {
+            let mut stream = byte_stream;
+            
+            while let Some(chunk) = stream.next().await {
+                match chunk {
+                    Ok(bytes) => {
+                        if let Ok(text) = String::from_utf8(bytes.to_vec()) {
+                            for line in text.lines() {
+                                let line = line.trim();
+                                if line.starts_with("data: ") {
+                                    let data = line.strip_prefix("data: ").unwrap_or("");
+                                    if data == "[DONE]" {
+                                        continue;
+                                    }
+                                    if let Ok(value) = serde_json::from_str::<Value>(data) {
+                                        yield Ok(value);
+                                    }
                                 }
                             }
                         }
                     }
-                    None
+                    Err(e) => {
+                        yield Err(MoarkError::RequestError(e));
+                    }
                 }
-                Err(e) => Some(Err(MoarkError::RequestError(e))),
             }
-        }).filter_map(|x| x));
+        };
 
-        Ok(stream)
+        Ok(Box::pin(stream) as Pin<Box<dyn futures_util::Stream<Item = std::result::Result<Value, MoarkError>> + Send>>)
     }
 
     pub async fn image_generations(&self, request: &ImageRequest) -> Result<ImageResponse> {
@@ -157,7 +155,7 @@ impl MoarkClient {
 
     pub async fn test_connection(&self) -> Result<String> {
         let request = ChatRequest::new(
-            "Qwen2.5-0.5-Instruct",
+            "Qwen2.5-14B-Instruct",
             vec![super::models::ChatMessage {
                 role: "user".to_string(),
                 content: "你好".to_string(),

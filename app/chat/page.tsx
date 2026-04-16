@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Send, Trash2, Loader2, Settings } from "lucide-react";
+import { Send, Trash2, Loader2, Settings, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -28,7 +28,10 @@ const MODELS = [
   { id: "Qwen2.5-32B-Instruct", name: "Qwen 2.5 32B" },
   { id: "Qwen2.5-14B-Instruct", name: "Qwen 2.5 14B" },
   { id: "Yi-1.5-34B-Chat", name: "Yi 1.5 34B" },
+  { id: "ChatGLM4-9B", name: "ChatGLM4 9B" },
 ];
+
+const DEFAULT_SYSTEM_PROMPT = "你是一个有用的助手。";
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -37,22 +40,30 @@ export default function ChatPage() {
   const [selectedModel, setSelectedModel] = useState("DeepSeek-R1");
   const [isConnected, setIsConnected] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [apiToken, setApiToken] = useState("");
+  const [showParams, setShowParams] = useState(false);
+  const [apiToken, setApiToken] = useState("sk-85e09ea69821450cb18896bdcb032a51");
+  
+  const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
+  const [temperature, setTemperature] = useState(0.7);
+  const [maxTokens, setMaxTokens] = useState(2048);
+  const [topP, setTopP] = useState(0.95);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    checkConnection();
+    initToken();
   }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const checkConnection = async () => {
+  const initToken = async () => {
     try {
-      const connected = await invoke<boolean>("get_connection_status");
-      setIsConnected(connected);
-    } catch {
+      await invoke("set_api_token", { apiToken: "sk-85e09ea69821450cb18896bdcb032a51" });
+      setIsConnected(true);
+    } catch (e) {
+      console.error("Init token failed:", e);
       setIsConnected(false);
     }
   };
@@ -63,7 +74,6 @@ export default function ChatPage() {
       await invoke("set_api_token", { apiToken: apiToken.trim() });
       setIsConnected(true);
       setShowSettings(false);
-      setApiToken("");
     } catch (error) {
       alert(`设置失败: ${error}`);
     }
@@ -73,7 +83,8 @@ export default function ChatPage() {
     if (!input.trim() || isLoading) return;
 
     const userMessage: Message = { role: "user", content: input };
-    setMessages((prev) => [...prev, userMessage]);
+    const currentMessages = [...messages, userMessage];
+    setMessages(currentMessages);
     setInput("");
     setIsLoading(true);
 
@@ -81,9 +92,13 @@ export default function ChatPage() {
       const response = await invoke<ChatResponse>("chat", {
         params: {
           model: selectedModel,
-          messages: [...messages, userMessage],
-          temperature: 0.7,
-          max_tokens: 2048,
+          messages: [
+            { role: "system", content: systemPrompt },
+            ...currentMessages,
+          ],
+          temperature,
+          max_tokens: maxTokens,
+          stream: false,
         },
       });
 
@@ -141,6 +156,18 @@ export default function ChatPage() {
           <Button
             variant="outline"
             size="icon"
+            onClick={() => setShowParams(!showParams)}
+            title="参数设置"
+          >
+            {showParams ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
             onClick={() => setShowSettings(!showSettings)}
             title={isConnected ? "已连接" : "未连接"}
           >
@@ -153,6 +180,66 @@ export default function ChatPage() {
           </Button>
         </div>
       </div>
+
+      {showParams && (
+        <div className="px-6 py-4 border-b bg-muted/50 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">System Prompt</label>
+              <textarea
+                value={systemPrompt}
+                onChange={(e) => setSystemPrompt(e.target.value)}
+                placeholder="设置系统提示词..."
+                className="w-full h-20 px-3 py-2 rounded-lg border bg-background border-input text-sm resize-none"
+              />
+            </div>
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span>Temperature: {temperature}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="2"
+                  step="0.1"
+                  value={temperature}
+                  onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span>Max Tokens: {maxTokens}</span>
+                </div>
+                <input
+                  type="range"
+                  min="256"
+                  max="8192"
+                  step="256"
+                  value={maxTokens}
+                  onChange={(e) => setMaxTokens(parseInt(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span>Top P: {topP}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={topP}
+                  onChange={(e) => setTopP(parseFloat(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showSettings && (
         <div className="px-6 py-4 border-b bg-muted/50">
@@ -203,6 +290,8 @@ export default function ChatPage() {
                 className={`max-w-[80%] rounded-lg px-4 py-3 ${
                   message.role === "user"
                     ? "bg-primary text-primary-foreground"
+                    : message.role === "system"
+                    ? "bg-yellow-100 text-yellow-800"
                     : "bg-muted"
                 }`}
               >

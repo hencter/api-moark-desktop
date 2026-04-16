@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{State, Emitter, Window};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use serde_json::Value;
 
 use crate::moark::{ChatMessage, ChatRequest, MoarkClient};
 
@@ -46,13 +47,14 @@ pub async fn set_api_token(
 
 #[tauri::command]
 pub async fn chat(
+    window: Window,
     params: ChatParams,
     state: State<'_, AppState>,
 ) -> Result<ChatResponse, String> {
     let guard = state.moark_client.lock().await;
     let client = guard.as_ref().ok_or("API token not set. Please set API token first.")?;
 
-    let mut request = ChatRequest::new(params.model, params.messages);
+    let mut request = ChatRequest::new(params.model.clone(), params.messages);
     
     if let Some(temp) = params.temperature {
         request = request.with_temperature(temp);
@@ -62,6 +64,65 @@ pub async fn chat(
     }
     if let Some(stream) = params.stream {
         request = request.with_stream(stream);
+    }
+
+    if params.stream == Some(true) {
+        let stream = client.chat_completions_stream(&request)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        use futures_util::StreamExt;
+        let mut stream = stream;
+        let mut content = String::new();
+
+        while let Some(result) = stream.next().await {
+            match result {
+                Ok(value) => {
+                    if let Some(text) = value.get("choices")
+                        .and_then(|c| c.as_array())
+                        .and_then(|arr| arr.first())
+                        .and_then(|c| c.get("delta"))
+                        .and_then(|d| d.get("content"))
+                        .and_then(|c| c.as_str())
+                    {
+                        content.push_str(text);
+                        let _ = window.emit("chat-stream", serde_json::json!({
+                            "content": text,
+                            "done": false
+                        }));
+                    }
+                    
+                    if let Some(reason) = value.get("choices")
+                        .and_then(|c| c.as_array())
+                        .and_then(|arr| arr.first())
+                        .and_then(|c| c.get("finish_reason"))
+                        .and_then(|f| f.as_str())
+                    {
+                        if reason == "stop" {
+                            let _ = window.emit("chat-stream", serde_json::json!({
+                                "content": "",
+                                "done": true
+                            }));
+                        }
+                    }
+                }
+                Err(e) => {
+                    let err_msg = format!("{:?}", e);
+                    let _ = window.emit("chat-stream", serde_json::json!({
+                        "error": err_msg,
+                        "done": true
+                    }));
+                    return Err(err_msg);
+                }
+            }
+        }
+
+        return Ok(ChatResponse {
+            id: format!("stream-{}", chrono::Utc::now().timestamp()),
+            content,
+            model: params.model,
+            usage: None,
+        });
     }
 
     let response = client.chat_completions(&request)
