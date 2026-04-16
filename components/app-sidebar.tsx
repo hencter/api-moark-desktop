@@ -10,6 +10,7 @@ import {
   Zap,
   Database,
   Settings,
+  MessageSquare,
 } from "lucide-react";
 
 const navItems = [
@@ -17,6 +18,11 @@ const navItems = [
     title: "仪表板",
     href: "/",
     icon: LayoutDashboard,
+  },
+  {
+    title: "AI 对话",
+    href: "/chat",
+    icon: MessageSquare,
   },
   {
     title: "模型广场",
