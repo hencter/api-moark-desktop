@@ -691,6 +691,89 @@ curl https://ai.gitee.com/v1/chat/completions \
 
 ## 常用模型列表
 
+### 模型列表接口
+
+获取模力方舟平台上支持的所有的模型列表，可根据算力厂商以及模型类型进行筛选。
+
+```
+GET https://ai.gitee.com/v1/models
+```
+
+### Query Parameters
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| vendor | string | 算力厂商 |
+| type | string | 模型支持类型 |
+
+### type 可选值
+
+| 值 | 说明 |
+|-----|------|
+| all | 所有类型（默认，不筛选） |
+| text2speech | 文本转语音（TTS） |
+| text2image | 文本生成图像（文生图） |
+| embeddings | 向量嵌入生成 |
+| image2text | 图像转文本（图生文） |
+
+### 响应示例
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "string",
+      "object": "model",
+      "created": 1,
+      "owned_by": "string"
+    }
+  ]
+}
+```
+
+### Python 示例
+
+```python
+import requests
+
+url = "https://ai.gitee.com/v1/models"
+headers = {
+    "Authorization": "Bearer <your_access_token>"
+}
+
+response = requests.get(url, headers=headers)
+result = response.json()
+
+for model in result.get("data", []):
+    print(f"Model: {model['id']} (owned_by: {model.get('owned_by', 'N/A')})")
+```
+
+### curl 示例
+
+```bash
+curl https://ai.gitee.com/v1/models \
+  -H "Authorization: Bearer <your_access_token>"
+```
+
+### 过滤示例
+
+```bash
+# 仅获取文生图模型
+curl "https://ai.gitee.com/v1/models?type=text2image" \
+  -H "Authorization: Bearer <your_access_token>"
+
+# 仅获取 TTS 模型
+curl "https://ai.gitee.com/v1/models?type=text2speech" \
+  -H "Authorization: Bearer <your_access_token>"
+
+# 仅获取向量嵌入模型
+curl "https://ai.gitee.com/v1/models?type=embeddings" \
+  -H "Authorization: Bearer <your_access_token>"
+```
+
+---
+
 ### 文本生成模型
 
 - DeepSeek-R1
@@ -747,7 +830,7 @@ curl https://ai.gitee.com/v1/chat/completions \
 
 ---
 
-*最后更新：2026-04-16*
+*最后更新：2026-04-17*
 
 ---
 
