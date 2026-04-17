@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
@@ -129,4 +130,46 @@ pub struct ImageData {
     pub url: Option<String>,
     #[serde(rename = "b64_json")]
     pub b64_json: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VoiceFeatureRequest {
+    pub model: String,
+    pub prompt_text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VoiceFeatureResponse {
+    pub voice_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AsyncTask {
+    #[serde(rename = "task_id")]
+    pub task_id: String,
+    pub status: String,
+    #[serde(rename = "created_at")]
+    pub created_at: Option<String>,
+    #[serde(rename = "started_at")]
+    pub started_at: Option<String>,
+    #[serde(rename = "completed_at")]
+    pub completed_at: Option<String>,
+    pub output: Option<Value>,
+    pub urls: Option<AsyncTaskUrls>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AsyncTaskUrls {
+    pub get: Option<String>,
+    pub cancel: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VoiceCloneRequest {
+    pub model: String,
+    pub input: String,
+    #[serde(rename = "voice_url")]
+    pub voice_url: Option<String>,
+    #[serde(rename = "prompt_text")]
+    pub prompt_text: Option<String>,
 }

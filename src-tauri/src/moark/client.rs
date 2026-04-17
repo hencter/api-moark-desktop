@@ -1,10 +1,12 @@
 use std::pin::Pin;
+use std::path::Path;
+use std::io::Error as IoError;
 use reqwest::Client;
 use serde_json::Value;
 use thiserror::Error;
 use futures_util::StreamExt;
 
-use super::models::{ChatRequest, ChatResponse, ImageRequest, ImageResponse};
+use super::models::{ChatRequest, ChatResponse, ImageRequest, ImageResponse, AsyncTask, VoiceCloneRequest};
 
 pub const BASE_URL: &str = "https://ai.gitee.com/v1";
 
@@ -12,6 +14,8 @@ pub const BASE_URL: &str = "https://ai.gitee.com/v1";
 pub enum MoarkError {
     #[error("Request failed: {0}")]
     RequestError(#[from] reqwest::Error),
+    #[error("IO error: {0}")]
+    IoError(#[from] IoError),
     #[error("Parse error: {0}")]
     ParseError(String),
     #[error("Authentication error: {0}")]
@@ -24,10 +28,11 @@ pub enum MoarkError {
 
 pub type Result<T> = std::result::Result<T, MoarkError>;
 
+#[derive(Clone)]
 pub struct MoarkClient {
     client: Client,
-    base_url: String,
-    api_token: String,
+    pub base_url: String,
+    pub api_token: String,
 }
 
 impl MoarkClient {
@@ -170,5 +175,103 @@ impl MoarkClient {
             .as_ref()
             .map(|m| m.content.clone())
             .unwrap_or_default())
+    }
+
+    pub async fn extract_voice_feature(&self, file_path: &str, model: &str, prompt_text: &str) -> Result<Vec<u8>> {
+        let url = format!("{}/audio/voice-feature-extraction", self.base_url);
+        
+        let file_name = Path::new(file_path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("audio.wav");
+
+        let part = match reqwest::multipart::Part::file(file_path).await {
+            Ok(p) => p,
+            Err(e) => return Err(MoarkError::IoError(e)),
+        };
+
+        let form = reqwest::multipart::Form::new()
+            .text("model", model.to_string())
+            .text("prompt_text", prompt_text.to_string())
+            .part("file", part);
+
+        let response = self.client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .multipart(form)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(MoarkError::ApiError(format!("Status: {}, Error: {}", status, error_text)));
+        }
+
+        let bytes = response.bytes().await?.to_vec();
+        Ok(bytes)
+    }
+
+    pub async fn get_async_task(&self, task_id: &str) -> Result<AsyncTask> {
+        let url = format!("{}/task/{}", self.base_url, task_id);
+        
+        let response = self.client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(MoarkError::ApiError(format!("Status: {}, Error: {}", status, error_text)));
+        }
+
+        let result: Value = response.json().await?;
+        
+        serde_json::from_value(result)
+            .map_err(|e| MoarkError::ParseError(e.to_string()))
+    }
+
+    pub async fn voice_clone(&self, request: &VoiceCloneRequest) -> Result<AsyncTask> {
+        let url = format!("{}/async/audio/speech", self.base_url);
+        
+        let response = self.client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .header("Content-Type", "application/json")
+            .json(request)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(MoarkError::ApiError(format!("Status: {}, Error: {}", status, error_text)));
+        }
+
+        let result: Value = response.json().await?;
+        
+        serde_json::from_value(result)
+            .map_err(|e| MoarkError::ParseError(e.to_string()))
+    }
+
+    pub async fn download_file(&self, url: &str, output_path: &str) -> Result<()> {
+        let response = self.client
+            .get(url)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            return Err(MoarkError::ApiError(format!("Download failed: Status {}", status)));
+        }
+
+        let bytes = response.bytes().await?;
+        
+        tokio::fs::write(output_path, bytes).await
+            .map_err(|e| MoarkError::ApiError(format!("Failed to write file: {}", e)))?;
+
+        Ok(())
     }
 }

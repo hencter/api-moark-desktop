@@ -11,9 +11,10 @@ import {
   Database,
   Settings,
   MessageSquare,
+  Mic,
 } from "lucide-react";
 
-const navItems = [
+const nav_items = [
   {
     title: "仪表板",
     href: "/",
@@ -23,6 +24,11 @@ const navItems = [
     title: "AI 对话",
     href: "/chat",
     icon: MessageSquare,
+  },
+  {
+    title: "声音克隆",
+    href: "/voice-clone",
+    icon: Mic,
   },
   {
     title: "模型广场",
@@ -62,7 +68,7 @@ export function AppSidebar() {
       </div>
 
       <nav className="flex-1 p-2 space-y-1">
-        {navItems.map((item) => {
+        {nav_items.map((item) => {
           const isActive = pathname === item.href;
           const Icon = item.icon;
 
