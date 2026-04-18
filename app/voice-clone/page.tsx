@@ -278,11 +278,9 @@ export default function VoiceClonePage() {
           inputs: ttsInput,
           prompt_text: undefined,
           prompt_audio_url: ttsPromptAudio || undefined,
-          emo_audio_prompt_url: undefined,
-          emo_alpha: undefined,
           gender: undefined,
-          pitch: ttsPitch !== 1 ? ttsPitch : undefined,
-          speed: ttsSpeed !== 1 ? ttsSpeed : undefined,
+          pitch: ttsPitch !== 1 ? Math.floor(ttsPitch) : undefined,
+          speed: ttsSpeed !== 1 ? Math.floor(ttsSpeed) : undefined,
         }
       });
 
