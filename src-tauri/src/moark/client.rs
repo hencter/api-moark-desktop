@@ -326,16 +326,14 @@ impl MoarkClient {
             payload_map.insert("inputs".to_string(), serde_json::Value::String(text));
         }
         
-        if let Some(ref pt) = request.prompt_text {
-            if !pt.is_empty() {
-                payload_map.insert("prompt_text".to_string(), serde_json::Value::String(pt.clone()));
-            }
-        }
-        if let Some(ref pau) = request.prompt_audio_url {
-            if !pau.is_empty() {
-                payload_map.insert("prompt_audio_url".to_string(), serde_json::Value::String(pau.clone()));
-            }
-        }
+        // Always include optional fields as empty strings (like docs example)
+        payload_map.insert("prompt_text".to_string(), serde_json::Value::String(request.prompt_text.clone().unwrap_or_default()));
+        payload_map.insert("prompt_audio_url".to_string(), serde_json::Value::String(request.prompt_audio_url.clone().unwrap_or_default()));
+        
+        // Add gender, pitch, speed
+        payload_map.insert("gender".to_string(), serde_json::Value::String(request.gender.clone().unwrap_or_default()));
+        payload_map.insert("pitch".to_string(), serde_json::Value::Number(request.pitch.unwrap_or(1).into()));
+        payload_map.insert("speed".to_string(), serde_json::Value::Number(request.speed.unwrap_or(1).into()));
         if let Some(ref pl) = request.prompt_language {
             if !pl.is_empty() {
                 payload_map.insert("prompt_language".to_string(), serde_json::Value::String(pl.clone()));
