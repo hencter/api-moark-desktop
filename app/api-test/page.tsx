@@ -1,40 +1,82 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { Send, Copy, Check, RefreshCw, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
-const models = [
-  { id: "gpt-4o", name: "GPT-4o" },
-  { id: "claude-3.5", name: "Claude 3.5 Sonnet" },
-  { id: "deepseek-chat", name: "DeepSeek Chat" },
-  { id: "qwen-turbo", name: "Qwen Turbo" },
+const MODELS = [
+  { id: "DeepSeek-R1", name: "DeepSeek R1" },
+  { id: "Qwen2.5-72B-Instruct", name: "Qwen 2.5 72B" },
+  { id: "Qwen2.5-32B-Instruct", name: "Qwen 2.5 32B" },
+  { id: "Qwen2.5-14B-Instruct", name: "Qwen 2.5 14B" },
+  { id: "Yi-1.5-34B-Chat", name: "Yi 1.5 34B" },
+  { id: "ChatGLM4-9B", name: "ChatGLM4 9B" },
 ];
 
-const defaultParams = {
-  temperature: 0.7,
-  maxTokens: 2048,
-  topP: 0.9,
-  frequencyPenalty: 0,
-  presencePenalty: 0,
-};
+interface ChatResponse {
+  id: string;
+  content: string;
+  model: string;
+}
+
+interface Params {
+  temperature: number;
+  maxTokens: number;
+  topP: number;
+  frequencyPenalty: number;
+  presencePenalty: number;
+}
 
 export default function ApiTestPage() {
-  const [selectedModel, setSelectedModel] = useState("gpt-4o");
+  const [selectedModel, setSelectedModel] = useState("DeepSeek-R1");
   const [inputText, setInputText] = useState("");
-  const [params, setParams] = useState(defaultParams);
+  const [params, setParams] = useState<Params>({ temperature: 0.7, maxTokens: 2048, topP: 0.95, frequencyPenalty: 0, presencePenalty: 0 });
   const [response, setResponse] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [apiToken, setApiToken] = useState("");
+
+  useEffect(() => {
+    initToken();
+  }, []);
+
+  const initToken = async () => {
+    try {
+      const token = await invoke<string | null>("get_global_api_token");
+      if (token) {
+        setApiToken(token);
+        setIsConnected(true);
+      }
+    } catch (e) {
+      setIsConnected(false);
+    }
+  };
 
   const handleSend = async () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() || !isConnected) return;
     setIsLoading(true);
     setResponse("");
-    
-    setTimeout(() => {
-      setResponse(`这是模拟的 API 响应结果。\n\n模型: ${models.find(m => m.id === selectedModel)?.name}\n输入: ${inputText}\n\n参数:\n- temperature: ${params.temperature}\n- maxTokens: ${params.maxTokens}\n- topP: ${params.topP}\n\n响应内容将在这里显示...`);
+
+    try {
+      const result = await invoke<ChatResponse>("chat", {
+        params: {
+          model: selectedModel,
+          messages: [{ role: "user", content: inputText }],
+          temperature: params.temperature,
+          max_tokens: params.maxTokens,
+          top_p: params.topP,
+          stream: false,
+        },
+      });
+      setResponse(`模型: ${result.model}\nID: ${result.id}\n\n内容:\n${result.content}`);
+    } catch (error) {
+      setResponse(`错误: ${error}`);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   const handleCopy = () => {
@@ -46,10 +88,20 @@ export default function ApiTestPage() {
   const handleReset = () => {
     setInputText("");
     setResponse("");
-    setParams(defaultParams);
+    setParams({ temperature: 0.7, maxTokens: 2048, topP: 0.95, frequencyPenalty: 0, presencePenalty: 0 });
   };
 
-  const updateParam = (key: keyof typeof defaultParams, value: number) => {
+  const handleSetToken = async () => {
+    if (!apiToken.trim()) return;
+    try {
+      await invoke("set_global_api_token", { apiToken: apiToken.trim() });
+      setIsConnected(true);
+    } catch (error) {
+      alert(`设置失败: ${error}`);
+    }
+  };
+
+  const updateParam = (key: keyof Params, value: number) => {
     setParams((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -57,7 +109,7 @@ export default function ApiTestPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">API 测试台</h1>
-        <p className="text-muted-foreground mt-1">模拟 API 调用测试界面</p>
+        <p className="text-muted-foreground mt-1">调用 ai.gitee.com API 测试界面</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -69,7 +121,7 @@ export default function ApiTestPage() {
               onChange={(e) => setSelectedModel(e.target.value)}
               className="w-full h-10 px-3 rounded-lg border bg-background border-input focus:outline-none focus:ring-2 focus:ring-ring"
             >
-              {models.map((model) => (
+              {MODELS.map((model) => (
                 <option key={model.id} value={model.id}>
                   {model.name}
                 </option>
