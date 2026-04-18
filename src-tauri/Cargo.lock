@@ -2189,6 +2189,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "directories",
+ "dirs",
  "futures-util",
  "log",
  "once_cell",

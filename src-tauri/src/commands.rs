@@ -219,12 +219,21 @@ pub async fn set_global_api_token(
     api_token: String,
     state: State<'_, AppState>,
 ) -> Result<bool, String> {
+    // 保存到内存
     let mut guard = state.api_token.lock().await;
     *guard = Some(api_token.clone());
     
-    let client = MoarkClient::new(api_token);
+    let client = MoarkClient::new(api_token.clone());
     let mut moark_guard = state.moark_client.lock().await;
     *moark_guard = Some(client);
+    
+    // 持久化保存到文件
+    let config_path = dirs::config_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("moark-desktop");
+    std::fs::create_dir_all(&config_path).ok();
+    let config_file = config_path.join("api_token.txt");
+    std::fs::write(&config_file, &api_token).ok();
     
     Ok(true)
 }
@@ -233,6 +242,35 @@ pub async fn set_global_api_token(
 pub async fn get_global_api_token(
     state: State<'_, AppState>,
 ) -> Result<Option<String>, String> {
+    // 先从内存获取
+    {
+        let guard = state.api_token.lock().await;
+        if guard.is_some() {
+            return Ok(guard.clone());
+        }
+    }
+    
+    // 内存没有，从文件加载
+    let config_path = dirs::config_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("moark-desktop")
+        .join("api_token.txt");
+    
+    if config_path.exists() {
+        if let Ok(token) = std::fs::read_to_string(&config_path) {
+            let token = token.trim().to_string();
+            if !token.is_empty() {
+                // 存到内存
+                let mut guard = state.api_token.lock().await;
+                *guard = Some(token.clone());
+                let client = MoarkClient::new(token.clone());
+                let mut moark_guard = state.moark_client.lock().await;
+                *moark_guard = Some(client);
+                return Ok(Some(token));
+            }
+        }
+    }
+    
     let guard = state.api_token.lock().await;
     Ok(guard.clone())
 }
