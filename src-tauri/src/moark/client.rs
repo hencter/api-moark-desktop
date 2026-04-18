@@ -303,21 +303,14 @@ impl MoarkClient {
     pub async fn text_to_speech(&self, request: &TtsRequest) -> Result<AsyncTask> {
         let url = format!("{}/async/audio/speech", self.base_url);
         
-        let mut payload_map: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
-        payload_map.insert("model".to_string(), serde_json::Value::String(request.model.clone()));
-        payload_map.insert("inputs".to_string(), serde_json::Value::String(request.inputs.clone()));
-        
-        // Include optional fields with defaults like the docs example
-        payload_map.insert("prompt_text".to_string(), serde_json::Value::String(request.prompt_text.clone().unwrap_or_default()));
-        payload_map.insert("prompt_audio_url".to_string(), serde_json::Value::String(request.prompt_audio_url.clone().unwrap_or_default()));
-        payload_map.insert("gender".to_string(), serde_json::Value::String(request.gender.clone().unwrap_or_default()));
-        payload_map.insert("pitch".to_string(), serde_json::Value::Number(request.pitch.unwrap_or(1).into()));
-        payload_map.insert("speed".to_string(), serde_json::Value::Number(request.speed.unwrap_or(1).into()));
+        // Minimal payload - just required fields
+        let payload = serde_json::json!({
+            "model": request.model,
+            "inputs": request.inputs
+        });
         
         eprintln!("[DEBUG] TTS URL: {}", url);
-        eprintln!("[DEBUG] TTS payload: {}", serde_json::Value::Object(payload_map.clone()));
-        
-        let payload = serde_json::Value::Object(payload_map);
+        eprintln!("[DEBUG] TTS payload: {}", payload);
         
         let response = self.client
             .post(&url)
