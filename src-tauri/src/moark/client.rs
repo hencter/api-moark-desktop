@@ -300,40 +300,90 @@ impl MoarkClient {
             .map_err(|e| MoarkError::ParseError(e.to_string()))
     }
 
-    pub async fn text_to_speech(&self, request: &TtsRequest) -> Result<AsyncTask> {
-        // Check which endpoint to use based on MODEL name
-        // Async models: IndexTTS-2, Spark-TTS-0.5B, AudioFly, Qwen3-TTS, CosyVoice3
-        // Sync models: MegaTTS3, Duix, fish-speech, GLM-TTS, FunAudioLLM, etc.
+    /// 文本转语音 API
+/// 
+/// ai.gitee.com 有两种 TTS 端点:
+/// 1. 异步端点 /v1/async/audio/speech - 用于 IndexTTS-2, Spark-TTS 等模型
+/// 2. 同步端点 /v1/audio/speech - 用于 MegaTTS3 等模型
+/// 
+/// 区别:
+/// - 异步: 返回 task_id, 需要轮询获取结果
+/// - 同步: 直接返回音频 URL
+/// 
+/// 字段区别:
+/// - 异步用 "inputs" (复数)
+/// - 同步用 "input" (单数)
+/// 
+/// 文档示例 (异步):
+/// {
+///   "model": "IndexTTS-2",
+///   "inputs": "要转换的文本",
+///   "prompt_text": "",
+///   "prompt_audio_url": "",
+///   "gender": "",
+///   "pitch": 1,
+///   "speed": 1
+/// }
+pub async fn text_to_speech(&self, request: &TtsRequest) -> Result<AsyncTask> {
+        // ===== 1. 根据模型名称判断用哪个端点 =====
+        // 异步模型列表 (这些只能用异步端点)
         let async_models = ["indextts-2", "spark-tts", "audiofly", "qwen3-tts", "cosyvoice3"];
         let model_lower = request.model.to_lowercase();
+        // 检查模型名是否包含异步模型名称
         let is_async = async_models.iter().any(|m| model_lower.contains(m));
         
+        // 构建 URL
+        // 如果是异步模型: https://ai.gitee.com/v1/async/audio/speech
+        // 如果是同步模型: https://ai.gitee.com/v1/audio/speech
         let (url, use_sync) = if is_async {
             (format!("{}/async/audio/speech", self.base_url), false)
         } else {
             (format!("{}/audio/speech", self.base_url), true)
         };
         
-        // Build payload
+        // ===== 2. 构建请求体 =====
         let mut payload_map: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
+        
+        // model 字段 - 模型名称
         payload_map.insert("model".to_string(), serde_json::Value::String(request.model.clone()));
         
-        // Use correct field name based on endpoint
-        let text = request.inputs.clone().or(request.input.clone()).unwrap_or_default();
+        // text 字段 - 要转换的文本
+        // 优先用 inputs，没有就用 input
+        let text = request.inputs.clone()
+            .or(request.input.clone())
+            .unwrap_or_default();
+        
+        // 根据端点选择正确的字段名
         if use_sync {
+            // 同步端点用 "input" (单数)
             payload_map.insert("input".to_string(), serde_json::Value::String(text));
         } else {
+            // 异步端点用 "inputs" (复数)
             payload_map.insert("inputs".to_string(), serde_json::Value::String(text));
         }
         
-        // Always include optional fields as empty strings (like docs example)
-        payload_map.insert("prompt_text".to_string(), serde_json::Value::String(request.prompt_text.clone().unwrap_or_default()));
-        payload_map.insert("prompt_audio_url".to_string(), serde_json::Value::String(request.prompt_audio_url.clone().unwrap_or_default()));
+        // ===== 3. 可选字段 - 文档示例显示这些字段必须传 (即使是空字符串) =====
+        // 参考文档: https://ai.gitee.com/docs/products/apis/audio-tts-async
         
-        // Add gender, pitch, speed
-        payload_map.insert("gender".to_string(), serde_json::Value::String(request.gender.clone().unwrap_or_default()));
-        payload_map.insert("pitch".to_string(), serde_json::Value::Number(request.pitch.unwrap_or(1).into()));
-        payload_map.insert("speed".to_string(), serde_json::Value::Number(request.speed.unwrap_or(1).into()));
+        // prompt_text - 文本提示,指导语音风格/内容
+        payload_map.insert("prompt_text".to_string(), 
+            serde_json::Value::String(request.prompt_text.clone().unwrap_or_default()));
+        
+        // prompt_audio_url - 音频提示URL,指导语音风格/语调
+        payload_map.insert("prompt_audio_url".to_string(), 
+            serde_json::Value::String(request.prompt_audio_url.clone().unwrap_or_default()));
+        
+        // gender - 性别 (male/female)
+        payload_map.insert("gender".to_string(), 
+            serde_json::Value::String(request.gender.clone().unwrap_or_default()));
+        
+        // pitch - 音调,默认1
+        payload_map.insert("pitch".to_string(), 
+            serde_json::Value::Number(request.pitch.unwrap_or(1).into()));
+        
+        // speed - 语速,默认1
+        payload_map.insert("speed".to_string(), 
+            serde_json::Value::Number(request.speed.unwrap_or(1).into()));
         if let Some(ref pl) = request.prompt_language {
             if !pl.is_empty() {
                 payload_map.insert("prompt_language".to_string(), serde_json::Value::String(pl.clone()));
@@ -348,8 +398,13 @@ impl MoarkClient {
         
         let payload = serde_json::Value::Object(payload_map);
         
+        // 调试日志
         eprintln!("[DEBUG] TTS URL: {}", url);
+        eprintln!("[DEBUG] TTS model: {}", request.model);
+        eprintln!("[DEBUG] TTS is_async: {}", is_async);
+        eprintln!("[DEBUG] TTS use_sync: {}", use_sync);
         eprintln!("[DEBUG] TTS payload: {}", payload);
+        eprintln!("[DEBUG] TTS api_token first 10 chars: {}", &self.api_token[..10.min(self.api_token.len())]);
         
         let response = self.client
             .post(&url)
