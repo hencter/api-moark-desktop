@@ -6,14 +6,11 @@ import { Send, Copy, Check, RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-const MODELS = [
-  { id: "DeepSeek-R1", name: "DeepSeek R1" },
-  { id: "Qwen2.5-72B-Instruct", name: "Qwen 2.5 72B" },
-  { id: "Qwen2.5-32B-Instruct", name: "Qwen 2.5 32B" },
-  { id: "Qwen2.5-14B-Instruct", name: "Qwen 2.5 14B" },
-  { id: "Yi-1.5-34B-Chat", name: "Yi 1.5 34B" },
-  { id: "ChatGLM4-9B", name: "ChatGLM4 9B" },
-];
+interface ModelInfo {
+  id: string;
+  object?: string;
+  owned_by?: string;
+}
 
 interface ChatResponse {
   id: string;
@@ -38,6 +35,7 @@ export default function ApiTestPage() {
   const [copied, setCopied] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [apiToken, setApiToken] = useState("");
+  const [modelsList, setModelsList] = useState<ModelInfo[]>([]);
 
   useEffect(() => {
     initToken();
@@ -48,10 +46,23 @@ export default function ApiTestPage() {
       const token = await invoke<string | null>("get_global_api_token");
       if (token) {
         setApiToken(token);
+        await invoke("set_api_token", { apiToken: token });
         setIsConnected(true);
+        await loadModels();
       }
     } catch (e) {
       setIsConnected(false);
+    }
+  };
+
+  const loadModels = async () => {
+    try {
+      const result = await invoke<{ data: ModelInfo[] }>("list_models");
+      if (result.data) {
+        setModelsList(result.data);
+      }
+    } catch (e) {
+      console.error("Failed to load models:", e);
     }
   };
 
@@ -121,11 +132,11 @@ export default function ApiTestPage() {
               onChange={(e) => setSelectedModel(e.target.value)}
               className="w-full h-10 px-3 rounded-lg border bg-background border-input focus:outline-none focus:ring-2 focus:ring-ring"
             >
-              {MODELS.map((model) => (
+              {modelsList.length > 0 ? modelsList.map((model) => (
                 <option key={model.id} value={model.id}>
-                  {model.name}
+                  {model.id}
                 </option>
-              ))}
+              )) : <option value="DeepSeek-R1">DeepSeek-R1</option>}
             </select>
           </div>
 
