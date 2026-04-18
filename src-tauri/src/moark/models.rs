@@ -88,6 +88,7 @@ pub struct Usage {
     pub total_tokens: u32,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StreamChoice {
     pub index: u32,
@@ -97,6 +98,7 @@ pub struct StreamChoice {
     pub finish_reason: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StreamChunk {
     pub id: String,
@@ -107,6 +109,7 @@ pub struct StreamChunk {
     pub choices: Vec<StreamChoice>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImageRequest {
     pub prompt: String,
@@ -118,12 +121,14 @@ pub struct ImageRequest {
     pub response_format: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImageResponse {
     pub created: u64,
     pub data: Vec<ImageData>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImageData {
     #[serde(rename = "url")]
@@ -132,12 +137,14 @@ pub struct ImageData {
     pub b64_json: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VoiceFeatureRequest {
     pub model: String,
     pub prompt_text: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VoiceFeatureResponse {
     pub voice_id: Option<String>,
@@ -172,4 +179,156 @@ pub struct VoiceCloneRequest {
     pub voice_url: Option<String>,
     #[serde(rename = "prompt_text")]
     pub prompt_text: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebSearchRequest {
+    pub query: String,
+    pub summary: Option<bool>,
+    pub freshness: Option<String>,
+    pub count: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebSearchResponse {
+    pub code: u32,
+    pub msg: Option<String>,
+    pub data: Option<WebSearchData>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebSearchData {
+    #[serde(rename = "_type")]
+    pub type_field: Option<String>,
+    #[serde(rename = "queryContext")]
+    pub query_context: Option<QueryContext>,
+    pub web_pages: Option<WebPages>,
+    pub images: Option<SearchImages>,
+    pub videos: Option<SearchVideos>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryContext {
+    #[serde(rename = "originalQuery")]
+    pub original_query: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebPages {
+    #[serde(rename = "webSearchUrl")]
+    pub web_search_url: Option<String>,
+    #[serde(rename = "totalEstimatedMatches")]
+    pub total_estimated_matches: Option<u64>,
+    pub value: Vec<WebPageResult>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebPageResult {
+    pub id: Option<String>,
+    pub name: Option<String>,
+    pub url: Option<String>,
+    #[serde(rename = "displayUrl")]
+    pub display_url: Option<String>,
+    pub snippet: Option<String>,
+    pub summary: Option<String>,
+    #[serde(rename = "siteName")]
+    pub site_name: Option<String>,
+    #[serde(rename = "siteIcon")]
+    pub site_icon: Option<String>,
+    #[serde(rename = "datePublished")]
+    pub date_published: Option<String>,
+    #[serde(rename = "dateLastCrawled")]
+    pub date_last_crawled: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchImages {
+    #[serde(rename = "webSearchUrl")]
+    pub web_search_url: Option<String>,
+    pub value: Vec<SearchImageResult>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchImageResult {
+    pub name: Option<String>,
+    #[serde(rename = "thumbnailUrl")]
+    pub thumbnail_url: Option<String>,
+    #[serde(rename = "contentUrl")]
+    pub content_url: Option<String>,
+    #[serde(rename = "hostPageUrl")]
+    pub host_page_url: Option<String>,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchVideos {
+    #[serde(rename = "webSearchUrl")]
+    pub web_search_url: Option<String>,
+    pub value: Vec<SearchVideoResult>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchVideoResult {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    #[serde(rename = "thumbnailUrl")]
+    pub thumbnail_url: Option<String>,
+    #[serde(rename = "contentUrl")]
+    pub content_url: Option<String>,
+    #[serde(rename = "hostPageUrl")]
+    pub host_page_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TtsRequest {
+    pub model: String,
+    #[serde(rename = "inputs")]
+    pub inputs: String,
+    #[serde(rename = "prompt_text")]
+    pub prompt_text: Option<String>,
+    #[serde(rename = "prompt_audio_url")]
+    pub prompt_audio_url: Option<String>,
+    pub gender: Option<String>,
+    pub pitch: Option<i32>,
+    pub speed: Option<i32>,
+}
+
+impl TtsRequest {
+    pub fn new(model: impl Into<String>, inputs: impl Into<String>) -> Self {
+        Self {
+            model: model.into(),
+            inputs: inputs.into(),
+            prompt_text: None,
+            prompt_audio_url: None,
+            gender: None,
+            pitch: None,
+            speed: None,
+        }
+    }
+
+    pub fn with_prompt_text(mut self, prompt_text: impl Into<String>) -> Self {
+        self.prompt_text = Some(prompt_text.into());
+        self
+    }
+
+    pub fn with_prompt_audio_url(mut self, url: impl Into<String>) -> Self {
+        self.prompt_audio_url = Some(url.into());
+        self
+    }
+
+    pub fn with_gender(mut self, gender: impl Into<String>) -> Self {
+        self.gender = Some(gender.into());
+        self
+    }
+
+    pub fn with_pitch(mut self, pitch: i32) -> Self {
+        self.pitch = Some(pitch);
+        self
+    }
+
+    pub fn with_speed(mut self, speed: i32) -> Self {
+        self.speed = Some(speed);
+        self
+    }
 }

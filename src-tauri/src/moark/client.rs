@@ -6,7 +6,7 @@ use serde_json::Value;
 use thiserror::Error;
 use futures_util::StreamExt;
 
-use super::models::{ChatRequest, ChatResponse, ImageRequest, ImageResponse, AsyncTask, VoiceCloneRequest};
+use super::models::{ChatRequest, ChatResponse, ImageRequest, ImageResponse, AsyncTask, VoiceCloneRequest, TtsRequest, WebSearchRequest, WebSearchResponse};
 
 pub const BASE_URL: &str = "https://ai.gitee.com/v1";
 
@@ -18,6 +18,7 @@ pub enum MoarkError {
     IoError(#[from] IoError),
     #[error("Parse error: {0}")]
     ParseError(String),
+    #[allow(dead_code)]
     #[error("Authentication error: {0}")]
     AuthError(String),
     #[error("Rate limit error")]
@@ -49,6 +50,7 @@ impl MoarkClient {
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_api_token(mut self, api_token: impl Into<String>) -> Self {
         self.api_token = api_token.into();
         self
@@ -135,6 +137,7 @@ impl MoarkClient {
         Ok(Box::pin(stream) as Pin<Box<dyn futures_util::Stream<Item = std::result::Result<Value, MoarkError>> + Send>>)
     }
 
+    #[allow(dead_code)]
     pub async fn image_generations(&self, request: &ImageRequest) -> Result<ImageResponse> {
         let url = format!("{}/images/generations", self.base_url);
         
@@ -180,7 +183,7 @@ impl MoarkClient {
     pub async fn extract_voice_feature(&self, file_path: &str, model: &str, prompt_text: &str) -> Result<Vec<u8>> {
         let url = format!("{}/audio/voice-feature-extraction", self.base_url);
         
-        let file_name = Path::new(file_path)
+        let _file_name = Path::new(file_path)
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("audio.wav");
@@ -254,6 +257,117 @@ impl MoarkClient {
         
         serde_json::from_value(result)
             .map_err(|e| MoarkError::ParseError(e.to_string()))
+    }
+
+    pub async fn text_to_speech(&self, request: &TtsRequest) -> Result<AsyncTask> {
+        let url = format!("{}/async/audio/speech", self.base_url);
+        
+        let payload = serde_json::json!({
+            "model": request.model,
+            "inputs": request.inputs,
+            "prompt_text": request.prompt_text,
+            "prompt_audio_url": request.prompt_audio_url,
+            "gender": request.gender,
+            "pitch": request.pitch,
+            "speed": request.speed,
+        });
+        
+        println!("[DEBUG] TTS payload: {:?}", payload);
+        
+        let response = self.client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .header("X-Failover-Enabled", "true")
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(MoarkError::ApiError(format!("Status: {}, Error: {}", status, error_text)));
+        }
+
+        let result: Value = response.json().await?;
+        
+        serde_json::from_value(result)
+            .map_err(|e| MoarkError::ParseError(e.to_string()))
+    }
+
+    pub async fn web_search(&self, request: &WebSearchRequest) -> Result<WebSearchResponse> {
+        let url = format!("{}/web-search", self.base_url);
+        
+        let query = request.query.clone();
+        let summary = request.summary.unwrap_or(true);
+        let freshness = request.freshness.clone().unwrap_or_else(|| "noLimit".to_string());
+        let count = request.count.unwrap_or(8);
+        
+        let payload = serde_json::json!({
+            "query": query,
+            "summary": summary,
+            "freshness": freshness,
+            "count": count,
+        });
+        
+        let response = self.client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .header("X-Failover-Enabled", "true")
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(MoarkError::ApiError(format!("Status: {}, Error: {}", status, error_text)));
+        }
+
+        let result: Value = response.json().await?;
+        
+        serde_json::from_value(result)
+            .map_err(|e| MoarkError::ParseError(e.to_string()))
+    }
+
+    pub async fn get_task_status(&self, task_id: &str) -> Result<AsyncTask> {
+        let url = format!("{}/task/{}", self.base_url, task_id);
+        
+        let response = self.client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(MoarkError::ApiError(format!("Status: {}, Error: {}", status, error_text)));
+        }
+
+        let result: Value = response.json().await?;
+        
+        serde_json::from_value(result)
+            .map_err(|e| MoarkError::ParseError(e.to_string()))
+    }
+
+    pub async fn cancel_task(&self, task_id: &str) -> Result<()> {
+        let url = format!("{}/task/{}/cancel", self.base_url, task_id);
+        
+        let response = self.client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(MoarkError::ApiError(format!("Status: {}, Error: {}", status, error_text)));
+        }
+
+        Ok(())
     }
 
     pub async fn download_file(&self, url: &str, output_path: &str) -> Result<()> {
