@@ -48,13 +48,5 @@
       "timestampUrl": ""
     }
   },
-  "plugins": {
-    "dialog": {
-      "open": true,
-      "save": true
-    },
-    "fs": {
-      "scope": ["**"]
-    }
-  }
+  "plugins": {}
 }

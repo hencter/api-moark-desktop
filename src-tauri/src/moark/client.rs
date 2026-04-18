@@ -305,13 +305,21 @@ impl MoarkClient {
         
         let mut payload_map: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
         payload_map.insert("model".to_string(), serde_json::Value::String(request.model.clone()));
-        payload_map.insert("inputs".to_string(), serde_json::Value::String(request.inputs.clone()));
+        payload_map.insert("input".to_string(), serde_json::Value::String(request.input.clone()));
         
         if let Some(ref pt) = request.prompt_text {
             payload_map.insert("prompt_text".to_string(), serde_json::Value::String(pt.clone()));
         }
         if let Some(ref pau) = request.prompt_audio_url {
             payload_map.insert("prompt_audio_url".to_string(), serde_json::Value::String(pau.clone()));
+        }
+        if let Some(ref eap) = request.emo_audio_prompt_url {
+            payload_map.insert("emo_audio_prompt_url".to_string(), serde_json::Value::String(eap.clone()));
+        }
+        if let Some(ea) = request.emo_alpha {
+            if let Some(num) = serde_json::Number::from_f64(ea as f64) {
+                payload_map.insert("emo_alpha".to_string(), serde_json::Value::Number(num));
+            }
         }
         if let Some(ref g) = request.gender {
             payload_map.insert("gender".to_string(), serde_json::Value::String(g.clone()));

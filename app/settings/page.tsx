@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Key, Plus, Eye, EyeOff, Globe, Palette, Info, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { Key, Plus, Eye, EyeOff, Globe, Palette, Info, X, Loader2, CheckCircle } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
 
 interface ApiKey {
@@ -35,6 +36,39 @@ export default function SettingsPage() {
   const [newKeyName, setNewKeyName] = useState("");
   const [newKeyValue, setNewKeyValue] = useState("");
   const [selectedLang, setSelectedLang] = useState("zh-CN");
+  
+  const [giteeToken, setGiteeToken] = useState("");
+  const [isTokenSet, setIsTokenSet] = useState(false);
+  const [isSettingToken, setIsSettingToken] = useState(false);
+
+  useEffect(() => {
+    loadGiteeToken();
+  }, []);
+
+  const loadGiteeToken = async () => {
+    try {
+      const token = await invoke<string | null>("get_global_api_token");
+      if (token) {
+        setGiteeToken(token);
+        setIsTokenSet(true);
+      }
+    } catch (e) {
+      console.error("Failed to load token:", e);
+    }
+  };
+
+  const saveGiteeToken = async () => {
+    if (!giteeToken.trim()) return;
+    setIsSettingToken(true);
+    try {
+      await invoke("set_global_api_token", { apiToken: giteeToken });
+      setIsTokenSet(true);
+    } catch (e) {
+      console.error("Failed to save token:", e);
+    } finally {
+      setIsSettingToken(false);
+    }
+  };
 
   const toggleKeyVisibility = (id: string) => {
     setVisibleKeys((prev) => {
@@ -104,6 +138,42 @@ export default function SettingsPage() {
 
       {activeTab === "api" && (
         <div className="space-y-4">
+          <div className="rounded-lg border bg-card p-6 shadow-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                <Key className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-medium">Gitee AI Token</h3>
+                <p className="text-sm text-muted-foreground">用于语音合成、搜索等 AI 功能</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={giteeToken}
+                onChange={(e) => {
+                  setGiteeToken(e.target.value);
+                  setIsTokenSet(false);
+                }}
+                placeholder="请输入 Gitee AI API Token"
+                className="flex-1 px-3 py-2 rounded-lg border bg-background border-input focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <button
+                onClick={saveGiteeToken}
+                disabled={!giteeToken.trim() || isSettingToken}
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2"
+              >
+                {isSettingToken ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : isTokenSet ? (
+                  <CheckCircle className="h-4 w-4" />
+                ) : null}
+                {isTokenSet ? "已保存" : "保存"}
+              </button>
+            </div>
+          </div>
+
           <div className="flex justify-end">
             <button
               onClick={() => setShowAddModal(true)}

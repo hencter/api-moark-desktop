@@ -3,14 +3,14 @@
 import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { FolderOpen, Upload, FileAudio, Play, Download, X, CheckCircle, Loader2, AlertCircle } from "lucide-react";
+import { FolderOpen, Upload, FileAudio, Play, Download, X, CheckCircle, Loader2, AlertCircle, Mic, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 interface TaskStatus {
   task_id: string;
   status: string;
-  output?: any;
+  output?: Record<string, unknown>;
 }
 
 interface CloneComplete {
@@ -23,18 +23,50 @@ interface CloneError {
   error: string;
 }
 
+interface AsyncTaskResult {
+  task_id: string;
+  status: string;
+}
+
+type TabType = "tts" | "clone";
+
+const TTS_MODELS = [
+  { value: "IndexTTS-2", label: "IndexTTS-2 (推荐)" },
+  { value: "Spark-TTS-0.5B", label: "Spark-TTS-0.5B" },
+  { value: "AudioFly", label: "AudioFly" },
+  { value: "Qwen3-TTS", label: "Qwen3-TTS" },
+  { value: "CosyVoice3", label: "CosyVoice3" },
+];
+
+const VOICE_PRESETS = [
+  { value: "", label: "默认音色" },
+  { value: "https://gitee.com/gitee-ai/moark-assets/raw/master/jay_prompt.wav", label: "Jay (中文男声)" },
+  { value: "https://gitee.com/gitee-ai/moark-assets/raw/master/index-tts-2/emo_sad.wav", label: "Sad (情感)" },
+  { value: "https://gitee.com/gitee-ai/moark-assets/raw/master/index-tts-2/emo_happy.wav", label: "Happy (情感)" },
+];
+
 export default function VoiceClonePage() {
+  const [activeTab, setActiveTab] = useState<TabType>("tts");
   const [projectPath, setProjectPath] = useState<string>("");
+  
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioPreview, setAudioPreview] = useState<string>("");
   const [promptText, setPromptText] = useState("");
-  const [isDragging, setIsDragging] = useState(false);
+  
   const [isProcessing, setIsProcessing] = useState(false);
   const [voiceFeature, setVoiceFeature] = useState<Uint8Array | null>(null);
   const [cloneStatus, setCloneStatus] = useState<string>("");
   const [taskId, setTaskId] = useState<string>("");
   const [outputPath, setOutputPath] = useState<string>("");
   const [error, setError] = useState<string>("");
+
+  const [ttsInput, setTtsInput] = useState("");
+  const [ttsModel, setTtsModel] = useState("IndexTTS-2");
+  const [ttsPromptAudio, setTtsPromptAudio] = useState("");
+  const [ttsPitch, setTtsPitch] = useState(1);
+  const [ttsSpeed, setTtsSpeed] = useState(1);
+  const [ttsStatus, setTtsStatus] = useState("");
+  const [ttsOutputPath, setTtsOutputPath] = useState("");
 
   useEffect(() => {
     loadProjectPath();
@@ -64,6 +96,21 @@ export default function VoiceClonePage() {
       setError(event.payload.error);
       setIsProcessing(false);
     });
+
+    listen<TaskStatus>("tts-progress", (event) => {
+      setTtsStatus(event.payload.status);
+    });
+
+    listen<CloneComplete>("tts-complete", (event) => {
+      setTtsOutputPath(event.payload.output_path);
+      setTtsStatus("完成");
+      setIsProcessing(false);
+    });
+
+    listen<CloneError>("tts-error", (event) => {
+      setError(event.payload.error);
+      setIsProcessing(false);
+    });
   };
 
   const selectProjectFolder = async () => {
@@ -86,17 +133,10 @@ export default function VoiceClonePage() {
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(false);
     
     const files = e.dataTransfer.files;
     if (files.length > 0) {
@@ -151,7 +191,7 @@ export default function VoiceClonePage() {
       const uint8Array = new Uint8Array(arrayBuffer);
       
       await invoke("set_project_path", { path: projectPath });
-      await invoke("set_api_token", { apiToken: "sk-85e09ea69821450cb18896bdcb032a51" });
+      await invoke("set_api_token", { apiToken: "" });
       
       const tempPath = `${projectPath}/temp_audio_${Date.now()}.wav`;
       await invoke("save_temp_file", { data: Array.from(uint8Array), path: tempPath });
@@ -192,9 +232,9 @@ export default function VoiceClonePage() {
 
     try {
       await invoke("set_project_path", { path: projectPath });
-      await invoke("set_api_token", { apiToken: "sk-85e09ea69821450cb18896bdcb032a51" });
+      await invoke("set_api_token", { apiToken: "" });
 
-      const result = await invoke<any>("start_voice_clone", {
+      const result = await invoke<AsyncTaskResult>("start_voice_clone", {
         params: {
           model: "CosyVoice3",
           input: "你好，这是我使用克隆声音生成的测试音频。",
@@ -212,25 +252,83 @@ export default function VoiceClonePage() {
     }
   };
 
-  const getStatusIcon = () => {
-    if (isProcessing) return <Loader2 className="h-5 w-5 animate-spin text-blue-500" />;
-    if (cloneStatus === "succeeded" || outputPath) return <CheckCircle className="h-5 w-5 text-green-500" />;
-    if (cloneStatus === "failed" || error) return <AlertCircle className="h-5 w-5 text-red-500" />;
-    return <FileAudio className="h-5 w-5 text-muted-foreground" />;
+  const startTts = async () => {
+    if (!ttsInput.trim()) {
+      setError("请输入要转换的文本");
+      return;
+    }
+
+    if (!projectPath) {
+      setError("请先选择项目文件夹");
+      return;
+    }
+
+    setIsProcessing(true);
+    setError("");
+    setTtsStatus("等待中...");
+    setTtsOutputPath("");
+
+    try {
+      await invoke("set_project_path", { path: projectPath });
+      await invoke("set_api_token", { apiToken: "" });
+
+      const result = await invoke<AsyncTaskResult>("text_to_speech", {
+        params: {
+          model: ttsModel,
+          input: ttsInput,
+          prompt_text: undefined,
+          prompt_audio_url: ttsPromptAudio || undefined,
+          emo_audio_prompt_url: undefined,
+          emo_alpha: undefined,
+          gender: undefined,
+          pitch: ttsPitch !== 1 ? ttsPitch : undefined,
+          speed: ttsSpeed !== 1 ? ttsSpeed : undefined,
+        }
+      });
+
+      setTaskId(result.task_id);
+      setTtsStatus(result.status);
+    } catch (e) {
+      console.error("Start TTS failed:", e);
+      setError(`TTS 生成失败: ${e}`);
+      setIsProcessing(false);
+    }
   };
 
-  const getStatusText = () => {
-    if (isProcessing) return "处理中...";
-    if (outputPath) return "完成";
-    if (error) return "失败";
-    return cloneStatus || "等待处理";
+  const playAudio = (path: string) => {
+    const audio = new Audio(`file://${path}`);
+    audio.play();
+  };
+
+  const downloadAudio = (path: string) => {
+    const link = document.createElement("a");
+    link.href = `file://${path}`;
+    link.download = path.split("/").pop() || "audio.wav";
+    link.click();
   };
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">声音克隆</h1>
-        <p className="text-muted-foreground mt-1">上传音频样本，提取声纹特征，实现声音克隆</p>
+        <h1 className="text-3xl font-bold tracking-tight">语音合成</h1>
+        <p className="text-muted-foreground mt-1">文本转语音 (TTS) 和声音克隆功能</p>
+      </div>
+
+      <div className="flex gap-2">
+        <Button
+          variant={activeTab === "tts" ? "default" : "outline"}
+          onClick={() => setActiveTab("tts")}
+        >
+          <Volume2 className="h-4 w-4 mr-2" />
+          文本转语音
+        </Button>
+        <Button
+          variant={activeTab === "clone" ? "default" : "outline"}
+          onClick={() => setActiveTab("clone")}
+        >
+          <Mic className="h-4 w-4 mr-2" />
+          声音克隆
+        </Button>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -242,7 +340,7 @@ export default function VoiceClonePage() {
               选择文件夹
             </Button>
           </div>
-          <div className="p-3 rounded-lg bg-muted/50 text-sm font-mono">
+          <div className="p-3 rounded-lg bg-muted/50 text-sm font-mono truncate">
             {projectPath || "未选择项目文件夹"}
           </div>
         </div>
@@ -250,136 +348,259 @@ export default function VoiceClonePage() {
         <div className="rounded-lg border bg-card p-6 shadow-sm">
           <h3 className="font-medium mb-4">状态监控</h3>
           <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-            {getStatusIcon()}
+            {isProcessing ? (
+              <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+            ) : (outputPath || ttsOutputPath) ? (
+              <CheckCircle className="h-5 w-5 text-green-500" />
+            ) : error ? (
+              <AlertCircle className="h-5 w-5 text-red-500" />
+            ) : (
+              <FileAudio className="h-5 w-5 text-muted-foreground" />
+            )}
             <div>
-              <div className="font-medium">{getStatusText()}</div>
+              <div className="font-medium">
+                {isProcessing 
+                  ? "处理中..." 
+                  : outputPath || ttsOutputPath 
+                    ? "完成" 
+                    : error 
+                      ? "失败" 
+                      : activeTab === "tts" 
+                        ? ttsStatus || "等待处理" 
+                        : cloneStatus || "等待处理"
+                }
+              </div>
               {taskId && <div className="text-xs text-muted-foreground">Task ID: {taskId}</div>}
             </div>
           </div>
-          {outputPath && (
-            <div className="mt-3 p-3 rounded-lg bg-green-500/10 text-green-600 text-sm">
-              已保存至: {outputPath}
-            </div>
-          )}
         </div>
       </div>
 
-      <div className="rounded-lg border bg-card p-6 shadow-sm">
-        <h3 className="font-medium mb-4">音频上传</h3>
-        
-        <div
-          className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-            isDragging 
-              ? "border-primary bg-primary/5" 
-              : "border-border hover:border-primary/50"
-          }`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          {audioPreview ? (
-            <div className="space-y-4">
-              <div className="flex items-center justify-center">
-                <audio controls src={audioPreview} className="w-full max-w-md" />
+      {activeTab === "tts" ? (
+        <div className="space-y-6">
+          <div className="rounded-lg border bg-card p-6 shadow-sm">
+            <h3 className="font-medium mb-4">合成参数</h3>
+            
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="text-sm text-muted-foreground mb-2 block">模型选择</label>
+                <select
+                  value={ttsModel}
+                  onChange={(e) => setTtsModel(e.target.value)}
+                  className="w-full h-10 px-3 rounded-lg border bg-background"
+                >
+                  {TTS_MODELS.map((m) => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
               </div>
-              <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                <FileAudio className="h-4 w-4" />
-                {audioFile.name}
+              
+              <div>
+                <label className="text-sm text-muted-foreground mb-2 block">音色参考 (可选)</label>
+                <select
+                  value={ttsPromptAudio}
+                  onChange={(e) => setTtsPromptAudio(e.target.value)}
+                  className="w-full h-10 px-3 rounded-lg border bg-background"
+                >
+                  {VOICE_PRESETS.map((p) => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))}
+                </select>
               </div>
-              <Button variant="outline" size="sm" onClick={clearAudio}>
-                <X className="h-4 w-4 mr-1" />
-                清除
-              </Button>
             </div>
-          ) : (
-            <>
-              <Upload className="h-10 w-10 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground mb-4">
-                拖拽音频文件到此处，或点击选择
-              </p>
-              <label>
+
+            <div className="grid gap-4 md:grid-cols-2 mt-4">
+              <div>
+                <label className="text-sm text-muted-foreground mb-2 block">音调 (pitch): {ttsPitch}</label>
                 <input
-                  type="file"
-                  accept="audio/*,.mp3,.wav,.m4a,.ogg"
-                  className="hidden"
-                  onChange={handleFileSelect}
+                  type="range"
+                  min="0"
+                  max="2"
+                  step="0.1"
+                  value={ttsPitch}
+                  onChange={(e) => setTtsPitch(parseFloat(e.target.value))}
+                  className="w-full"
                 />
-                <Button variant="secondary" size="sm" asChild>
-                  <span>选择文件</span>
-                </Button>
-              </label>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="rounded-lg border bg-card p-6 shadow-sm">
-        <h3 className="font-medium mb-4">声纹文本提示 (可选)</h3>
-        <Input
-          value={promptText}
-          onChange={(e) => setPromptText(e.target.value)}
-          placeholder="请输入与音频内容一致的文本描述，用于提高声纹提取准确性"
-          className="w-full"
-        />
-        <p className="text-xs text-muted-foreground mt-2">
-          建议输入音频中朗读的文本内容，可提高声纹提取质量
-        </p>
-      </div>
-
-      {error && (
-        <div className="rounded-lg border border-destructive bg-destructive/10 p-4 text-destructive">
-          {error}
-        </div>
-      )}
-
-      <div className="flex gap-4">
-        <Button
-          onClick={extractVoiceFeature}
-          disabled={!audioFile || isProcessing}
-          className="flex-1"
-        >
-          {isProcessing ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <FileAudio className="h-4 w-4 mr-2" />
-          )}
-          提取声纹特征
-        </Button>
-
-        {voiceFeature && audioFile && (
-          <Button
-            onClick={startVoiceClone}
-            disabled={isProcessing}
-            className="flex-1"
-          >
-            {isProcessing ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Play className="h-4 w-4 mr-2" />
-            )}
-            开始克隆
-          </Button>
-        )}
-
-        {outputPath && (
-          <Button variant="outline" onClick={() => {
-            const link = document.createElement("a");
-            link.href = `file://${outputPath}`;
-            link.download = outputPath.split("/").pop() || "voice_clone.wav";
-            link.click();
-          }}>
-            <Download className="h-4 w-4 mr-2" />
-            下载音频
-          </Button>
-        )}
-      </div>
-
-      {voiceFeature && (
-        <div className="rounded-lg border bg-green-500/10 p-4">
-          <div className="flex items-center gap-2 text-green-600">
-            <CheckCircle className="h-4 w-4" />
-            <span className="font-medium">声纹特征已提取 ({voiceFeature.byteLength} bytes)</span>
+              </div>
+              
+              <div>
+                <label className="text-sm text-muted-foreground mb-2 block">语速 (speed): {ttsSpeed}</label>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="2"
+                  step="0.1"
+                  value={ttsSpeed}
+                  onChange={(e) => setTtsSpeed(parseFloat(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+            </div>
           </div>
+
+          <div className="rounded-lg border bg-card p-6 shadow-sm">
+            <h3 className="font-medium mb-4">输入文本</h3>
+            <textarea
+              value={ttsInput}
+              onChange={(e) => setTtsInput(e.target.value)}
+              placeholder="请输入要转换为语音的文本..."
+              className="w-full h-40 px-3 py-2 rounded-lg border bg-background resize-none"
+            />
+            <div className="text-xs text-muted-foreground mt-2">
+              {ttsInput.length} 字符
+            </div>
+          </div>
+
+          {error && (
+            <div className="rounded-lg border border-destructive bg-destructive/10 p-4 text-destructive">
+              {error}
+            </div>
+          )}
+
+          <div className="flex gap-4">
+            <Button
+              onClick={startTts}
+              disabled={!ttsInput.trim() || isProcessing}
+              className="flex-1"
+            >
+              {isProcessing ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Volume2 className="h-4 w-4 mr-2" />
+              )}
+              开始生成
+            </Button>
+
+            {ttsOutputPath && (
+              <>
+                <Button variant="outline" onClick={() => playAudio(ttsOutputPath)}>
+                  <Play className="h-4 w-4 mr-2" />
+                  播放
+                </Button>
+                <Button variant="outline" onClick={() => downloadAudio(ttsOutputPath)}>
+                  <Download className="h-4 w-4 mr-2" />
+                  下载
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          <div className="rounded-lg border bg-card p-6 shadow-sm">
+            <h3 className="font-medium mb-4">音频上传</h3>
+            
+            <div
+              className="relative border-2 border-dashed rounded-lg p-8 text-center transition-colors border-border hover:border-primary/50"
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+            >
+              {audioPreview ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-center">
+                    <audio controls src={audioPreview} className="w-full max-w-md" />
+                  </div>
+                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <FileAudio className="h-4 w-4" />
+                    {audioFile?.name}
+                  </div>
+                  <Button variant="outline" size="sm" onClick={clearAudio}>
+                    <X className="h-4 w-4 mr-1" />
+                    清除
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <Upload className="h-10 w-10 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground mb-4">
+                    拖拽音频文件到此处，或点击选择
+                  </p>
+                  <label>
+                    <input
+                      type="file"
+                      accept="audio/*,.mp3,.wav,.m4a,.ogg"
+                      className="hidden"
+                      onChange={handleFileSelect}
+                    />
+                    <Button variant="secondary" size="sm" asChild>
+                      <span>选择文件</span>
+                    </Button>
+                  </label>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-lg border bg-card p-6 shadow-sm">
+            <h3 className="font-medium mb-4">声纹文本提示 (可选)</h3>
+            <Input
+              value={promptText}
+              onChange={(e) => setPromptText(e.target.value)}
+              placeholder="请输入与音频内容一致的文本描述，用于提高声纹提取准确性"
+              className="w-full"
+            />
+            <p className="text-xs text-muted-foreground mt-2">
+              建议输入音频中朗读的文本内容，可提高声纹提取质量
+            </p>
+          </div>
+
+          {error && (
+            <div className="rounded-lg border border-destructive bg-destructive/10 p-4 text-destructive">
+              {error}
+            </div>
+          )}
+
+          <div className="flex gap-4">
+            <Button
+              onClick={extractVoiceFeature}
+              disabled={!audioFile || isProcessing}
+              className="flex-1"
+            >
+              {isProcessing ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <FileAudio className="h-4 w-4 mr-2" />
+              )}
+              提取声纹特征
+            </Button>
+
+            {voiceFeature && audioFile && (
+              <Button
+                onClick={startVoiceClone}
+                disabled={isProcessing}
+                className="flex-1"
+              >
+                {isProcessing ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Play className="h-4 w-4 mr-2" />
+                )}
+                开始克隆
+              </Button>
+            )}
+
+            {outputPath && (
+              <>
+                <Button variant="outline" onClick={() => playAudio(outputPath)}>
+                  <Play className="h-4 w-4 mr-2" />
+                  播放
+                </Button>
+                <Button variant="outline" onClick={() => downloadAudio(outputPath)}>
+                  <Download className="h-4 w-4 mr-2" />
+                  下载
+                </Button>
+              </>
+            )}
+          </div>
+
+          {voiceFeature && (
+            <div className="rounded-lg border bg-green-500/10 p-4">
+              <div className="flex items-center gap-2 text-green-600">
+                <CheckCircle className="h-4 w-4" />
+                <span className="font-medium">声纹特征已提取 ({voiceFeature.byteLength} bytes)</span>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -255,9 +255,12 @@ pub struct VoiceCloneParams {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TtsParams {
     pub model: String,
-    pub inputs: String,
+    #[serde(rename = "input")]
+    pub input: String,
     pub prompt_text: Option<String>,
     pub prompt_audio_url: Option<String>,
+    pub emo_audio_prompt_url: Option<String>,
+    pub emo_alpha: Option<f32>,
     pub gender: Option<String>,
     pub pitch: Option<i32>,
     pub speed: Option<i32>,
@@ -440,13 +443,19 @@ pub async fn text_to_speech(
         (Some(client.clone()), project_path, api_token, base_url)
     };
 
-    let mut request = TtsRequest::new(params.model.clone(), params.inputs.clone());
+    let mut request = TtsRequest::new(params.model.clone(), params.input.clone());
     
     if let Some(pt) = params.prompt_text.clone() {
         request = request.with_prompt_text(pt);
     }
     if let Some(pau) = params.prompt_audio_url.clone() {
         request = request.with_prompt_audio_url(pau);
+    }
+    if let Some(eap) = params.emo_audio_prompt_url.clone() {
+        request = request.with_emo_audio_prompt_url(eap);
+    }
+    if let Some(ea) = params.emo_alpha {
+        request = request.with_emo_alpha(ea);
     }
     if let Some(g) = params.gender.clone() {
         request = request.with_gender(g);
