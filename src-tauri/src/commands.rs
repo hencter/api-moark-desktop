@@ -458,74 +458,44 @@ pub async fn text_to_speech(
         request = request.with_speed(s);
     }
 
-    let client_for_tts = client.as_ref().ok_or("Failed to create client")?;
-    let task = client_for_tts.text_to_speech(&request).await.map_err(|e| e.to_string())?;
+let client_for_tts = client.as_ref().ok_or("Failed to create client")?;
+    let result = client_for_tts.text_to_speech(&request).await.map_err(|e| e.to_string())?;
 
-    let task_id = task.task_id.clone();
-    let window_clone = window.clone();
-
-    tokio::spawn(async move {
-        let poll_client = MoarkClient::new(api_token).with_base_url(base_url);
+    // Sync endpoint returns URL directly
+    if let Some(url) = result.url {
+        let task_id = format!("sync_{}", chrono::Utc::now().timestamp_millis());
         
-        loop {
-            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-            
-            let check_result = poll_client.get_async_task(&task_id).await;
-            
-            match check_result {
-                Ok(task_result) => {
-                    let status = task_result.status.clone();
-                    let _ = window_clone.emit("tts-progress", serde_json::json!({
-                        "task_id": task_id,
-                        "status": status,
-                        "output": task_result.output
-                    }));
-
-                    if status == "succeeded" || status == "failed" {
-                        if let Some(path) = project_path {
-                            if let Some(output) = &task_result.output {
-                                if let Some(url) = output.get("file_url").and_then(|u| u.as_str()) {
-                                    let output_path = format!("{}/tts_{}.wav", path, task_id);
-                                    if let Err(e) = poll_client.download_file(url, &output_path).await {
-                                        let _ = window_clone.emit("tts-error", serde_json::json!({
-                                            "task_id": task_id,
-                                            "error": format!("Failed to download: {}", e)
-                                        }));
-                                    } else {
-                                        let _ = window_clone.emit("tts-complete", serde_json::json!({
-                                            "task_id": task_id,
-                                            "output_path": output_path
-                                        }));
-                                    }
-                                } else if let Some(url) = output.get("url").and_then(|u| u.as_str()) {
-                                    let output_path = format!("{}/tts_{}.wav", path, task_id);
-                                    if let Err(e) = poll_client.download_file(url, &output_path).await {
-                                        let _ = window_clone.emit("tts-error", serde_json::json!({
-                                            "task_id": task_id,
-                                            "error": format!("Failed to download: {}", e)
-                                        }));
-                                    } else {
-                                        let _ = window_clone.emit("tts-complete", serde_json::json!({
-                                            "task_id": task_id,
-                                            "output_path": output_path
-                                        }));
-                                    }
-                                }
-                            }
-                        }
-                        break;
-                    }
-                }
-                Err(e) => {
-                    let _ = window_clone.emit("tts-error", serde_json::json!({
-                        "task_id": task_id,
-                        "error": e.to_string()
-                    }));
-                    break;
-                }
+        // Download the audio file
+        if let Some(path) = project_path {
+            let output_path = format!("{}/tts_{}.wav", path, task_id);
+            if let Err(e) = client_for_tts.download_file(&url, &output_path).await {
+                return Err(format!("Failed to download audio: {}", e));
             }
+            
+            let _ = window.emit("tts-complete", serde_json::json!({
+                "task_id": task_id,
+                "output_path": output_path
+            }));
+            
+            return Ok(AsyncTask {
+                task_id,
+                status: "completed".to_string(),
+                created_at: None,
+                started_at: None,
+                completed_at: None,
+                output: None,
+                urls: None,
+            });
         }
-    });
+    }
 
-    Ok(task)
+    Ok(AsyncTask {
+        task_id: "sync".to_string(),
+        status: "completed".to_string(),
+        created_at: None,
+        started_at: None,
+        completed_at: None,
+        output: None,
+        urls: None,
+    })
 }

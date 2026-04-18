@@ -6,7 +6,7 @@ use serde_json::Value;
 use thiserror::Error;
 use futures_util::StreamExt;
 
-use super::models::{ChatRequest, ChatResponse, ImageRequest, ImageResponse, AsyncTask, VoiceCloneRequest, TtsRequest, WebSearchRequest, WebSearchResponse, ModelsList};
+use super::models::{ChatRequest, ChatResponse, ImageRequest, ImageResponse, AsyncTask, VoiceCloneRequest, TtsRequest, TtsSyncResponse, WebSearchRequest, WebSearchResponse, ModelsList};
 
 pub const BASE_URL: &str = "https://ai.gitee.com/v1";
 
@@ -300,13 +300,14 @@ impl MoarkClient {
             .map_err(|e| MoarkError::ParseError(e.to_string()))
     }
 
-    pub async fn text_to_speech(&self, request: &TtsRequest) -> Result<AsyncTask> {
-        let url = format!("{}/async/audio/speech", self.base_url);
+    pub async fn text_to_speech(&self, request: &TtsRequest) -> Result<TtsSyncResponse> {
+        // Use sync endpoint /v1/audio/speech (not async)
+        let url = format!("{}/audio/speech", self.base_url);
         
-        // Minimal payload - just required fields
+        // Sync endpoint uses "input" (singular), not "inputs" (plural)
         let payload = serde_json::json!({
             "model": request.model,
-            "inputs": request.inputs
+            "input": request.inputs  // Note: singular "input" for sync endpoint
         });
         
         eprintln!("[DEBUG] TTS URL: {}", url);
@@ -330,12 +331,12 @@ impl MoarkClient {
             return Err(MoarkError::ApiError(format!("Status: {}, Error: {}", status, error_text)));
         }
 
-        let result: Value = response.json().await?;
+        let result: TtsSyncResponse = response.json().await?;
         
-        serde_json::from_value(result)
-            .map_err(|e| MoarkError::ParseError(e.to_string()))
+        Ok(result)
     }
 
+    #[allow(dead_code)]
     pub async fn web_search(&self, request: &WebSearchRequest) -> Result<WebSearchResponse> {
         let url = format!("{}/web-search", self.base_url);
         
