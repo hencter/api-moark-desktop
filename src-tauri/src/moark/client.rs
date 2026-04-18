@@ -307,12 +307,12 @@ impl MoarkClient {
         payload_map.insert("model".to_string(), serde_json::Value::String(request.model.clone()));
         payload_map.insert("inputs".to_string(), serde_json::Value::String(request.inputs.clone()));
         
-        if request.prompt_text.is_some() {
-            payload_map.insert("prompt_text".to_string(), serde_json::Value::String(request.prompt_text.clone().unwrap()));
-        }
-        if request.prompt_audio_url.is_some() {
-            payload_map.insert("prompt_audio_url".to_string(), serde_json::Value::String(request.prompt_audio_url.clone().unwrap()));
-        }
+        // Include optional fields with defaults like the docs example
+        payload_map.insert("prompt_text".to_string(), serde_json::Value::String(request.prompt_text.clone().unwrap_or_default()));
+        payload_map.insert("prompt_audio_url".to_string(), serde_json::Value::String(request.prompt_audio_url.clone().unwrap_or_default()));
+        payload_map.insert("gender".to_string(), serde_json::Value::String(request.gender.clone().unwrap_or_default()));
+        payload_map.insert("pitch".to_string(), serde_json::Value::Number(request.pitch.unwrap_or(1).into()));
+        payload_map.insert("speed".to_string(), serde_json::Value::Number(request.speed.unwrap_or(1).into()));
         
         eprintln!("[DEBUG] TTS URL: {}", url);
         eprintln!("[DEBUG] TTS payload: {}", serde_json::Value::Object(payload_map.clone()));
