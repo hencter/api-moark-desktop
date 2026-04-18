@@ -303,15 +303,27 @@ impl MoarkClient {
     pub async fn text_to_speech(&self, request: &TtsRequest) -> Result<AsyncTask> {
         let url = format!("{}/async/audio/speech", self.base_url);
         
-        let payload = serde_json::json!({
-            "model": request.model,
-            "inputs": request.inputs,
-            "prompt_text": request.prompt_text,
-            "prompt_audio_url": request.prompt_audio_url,
-            "gender": request.gender,
-            "pitch": request.pitch,
-            "speed": request.speed,
-        });
+        let mut payload_map: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
+        payload_map.insert("model".to_string(), serde_json::Value::String(request.model.clone()));
+        payload_map.insert("inputs".to_string(), serde_json::Value::String(request.inputs.clone()));
+        
+        if let Some(ref pt) = request.prompt_text {
+            payload_map.insert("prompt_text".to_string(), serde_json::Value::String(pt.clone()));
+        }
+        if let Some(ref pau) = request.prompt_audio_url {
+            payload_map.insert("prompt_audio_url".to_string(), serde_json::Value::String(pau.clone()));
+        }
+        if let Some(ref g) = request.gender {
+            payload_map.insert("gender".to_string(), serde_json::Value::String(g.clone()));
+        }
+        if let Some(p) = request.pitch {
+            payload_map.insert("pitch".to_string(), serde_json::Value::Number(p.into()));
+        }
+        if let Some(s) = request.speed {
+            payload_map.insert("speed".to_string(), serde_json::Value::Number(s.into()));
+        }
+        
+        let payload = serde_json::Value::Object(payload_map);
         
         println!("[DEBUG] TTS payload: {:?}", payload);
         
