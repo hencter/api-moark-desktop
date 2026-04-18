@@ -347,10 +347,3 @@ pub struct ModelsList {
     pub object: Option<String>,
     pub data: Option<Vec<ModelInfo>>,
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TtsSyncResponse {
-    pub url: Option<String>,
-    pub created: Option<u64>,
-    pub format: Option<String>,
-}
