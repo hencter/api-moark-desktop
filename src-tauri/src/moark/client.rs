@@ -301,31 +301,29 @@ impl MoarkClient {
     }
 
     pub async fn text_to_speech(&self, request: &TtsRequest) -> Result<AsyncTask> {
-        // Check which endpoint to use based on input field
-        // MegaTTS3 uses sync /v1/audio/speech with "input"
-        // IndexTTS-2 uses async /v1/async/audio/speech with "inputs"
-        let (url, use_sync) = if request.input.is_some() {
-            (format!("{}/audio/speech", self.base_url), true)
-        } else {
+        // Check which endpoint to use based on MODEL name
+        // Async models: IndexTTS-2, Spark-TTS-0.5B, AudioFly, Qwen3-TTS, CosyVoice3
+        // Sync models: MegaTTS3, Duix, fish-speech, GLM-TTS, FunAudioLLM, etc.
+        let async_models = ["indextts-2", "spark-tts", "audiofly", "qwen3-tts", "cosyvoice3"];
+        let model_lower = request.model.to_lowercase();
+        let is_async = async_models.iter().any(|m| model_lower.contains(m));
+        
+        let (url, use_sync) = if is_async {
             (format!("{}/async/audio/speech", self.base_url), false)
+        } else {
+            (format!("{}/audio/speech", self.base_url), true)
         };
         
         // Build payload
         let mut payload_map: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
         payload_map.insert("model".to_string(), serde_json::Value::String(request.model.clone()));
         
+        // Use correct field name based on endpoint
+        let text = request.inputs.clone().or(request.input.clone()).unwrap_or_default();
         if use_sync {
-            // Sync endpoint uses "input"
-            if let Some(ref input) = request.input {
-                payload_map.insert("input".to_string(), serde_json::Value::String(input.clone()));
-            }
+            payload_map.insert("input".to_string(), serde_json::Value::String(text));
         } else {
-            // Async endpoint uses "inputs"
-            if let Some(ref inputs) = request.inputs {
-                payload_map.insert("inputs".to_string(), serde_json::Value::String(inputs.clone()));
-            } else if let Some(ref input) = request.input {
-                payload_map.insert("inputs".to_string(), serde_json::Value::String(input.clone()));
-            }
+            payload_map.insert("inputs".to_string(), serde_json::Value::String(text));
         }
         
         if let Some(ref pt) = request.prompt_text {
