@@ -307,29 +307,14 @@ impl MoarkClient {
         payload_map.insert("model".to_string(), serde_json::Value::String(request.model.clone()));
         payload_map.insert("input".to_string(), serde_json::Value::String(request.input.clone()));
         
-        if let Some(ref pt) = request.prompt_text {
-            payload_map.insert("prompt_text".to_string(), serde_json::Value::String(pt.clone()));
+        if request.prompt_text.is_some() {
+            payload_map.insert("prompt_text".to_string(), serde_json::Value::String(request.prompt_text.clone().unwrap()));
         }
-        if let Some(ref pau) = request.prompt_audio_url {
-            payload_map.insert("prompt_audio_url".to_string(), serde_json::Value::String(pau.clone()));
+        if request.prompt_audio_url.is_some() {
+            payload_map.insert("prompt_audio_url".to_string(), serde_json::Value::String(request.prompt_audio_url.clone().unwrap()));
         }
-        if let Some(ref eap) = request.emo_audio_prompt_url {
-            payload_map.insert("emo_audio_prompt_url".to_string(), serde_json::Value::String(eap.clone()));
-        }
-        if let Some(ea) = request.emo_alpha {
-            if let Some(num) = serde_json::Number::from_f64(ea as f64) {
-                payload_map.insert("emo_alpha".to_string(), serde_json::Value::Number(num));
-            }
-        }
-        if let Some(ref g) = request.gender {
-            payload_map.insert("gender".to_string(), serde_json::Value::String(g.clone()));
-        }
-        if let Some(p) = request.pitch {
-            payload_map.insert("pitch".to_string(), serde_json::Value::Number(p.into()));
-        }
-        if let Some(s) = request.speed {
-            payload_map.insert("speed".to_string(), serde_json::Value::Number(s.into()));
-        }
+        
+        eprintln!("[DEBUG] TTS payload: {}", serde_json::Value::Object(payload_map.clone()));
         
         let payload = serde_json::Value::Object(payload_map);
         
