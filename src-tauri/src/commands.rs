@@ -255,9 +255,13 @@ pub struct VoiceCloneParams {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TtsParams {
     pub model: String,
-    pub inputs: String,
+    pub input: Option<String>,
+    pub inputs: Option<String>,
     pub prompt_text: Option<String>,
     pub prompt_audio_url: Option<String>,
+    pub prompt_language: Option<String>,
+    pub intelligibility_weight: Option<f32>,
+    pub similarity_weight: Option<f32>,
     pub gender: Option<String>,
     pub pitch: Option<i32>,
     pub speed: Option<i32>,
@@ -440,7 +444,9 @@ pub async fn text_to_speech(
         (Some(client.clone()), project_path, api_token, base_url)
     };
 
-    let mut request = TtsRequest::new(params.model.clone(), params.inputs.clone());
+    // Use input if provided, otherwise use inputs
+    let text = params.inputs.clone().or(params.input.clone()).unwrap_or_default();
+    let mut request = TtsRequest::new(params.model.clone(), text);
     
     if let Some(pt) = params.prompt_text.clone() {
         request = request.with_prompt_text(pt);
@@ -460,11 +466,29 @@ pub async fn text_to_speech(
 
 let client_for_tts = client.as_ref().ok_or("Failed to create client")?;
     let task = client_for_tts.text_to_speech(&request).await.map_err(|e| e.to_string())?;
-
+    
     let task_id = task.task_id.clone();
-    let window_clone = window.clone();
-
     eprintln!("[DEBUG] TTS task_id: {}", task_id);
+    
+    // If status is "completed", it's a sync response - download directly
+    if task.status == "completed" {
+        if let Some(output) = &task.output {
+            if let Some(url) = output.get("url").and_then(|u| u.as_str()) {
+                if let Some(path) = project_path {
+                    let output_path = format!("{}/tts_{}.wav", path, task_id);
+                    if let Err(e) = client_for_tts.download_file(url, &output_path).await {
+                        return Err(format!("Failed to download: {}", e));
+                    }
+                    let _ = window.emit("tts-complete", serde_json::json!({
+                        "output_path": output_path
+                    }));
+                }
+            }
+        }
+        return Ok(task);
+    }
+
+    let window_clone = window.clone();
 
     tokio::spawn(async move {
         let poll_client = MoarkClient::new(api_token).with_base_url(base_url);

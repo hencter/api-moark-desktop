@@ -301,13 +301,32 @@ impl MoarkClient {
     }
 
     pub async fn text_to_speech(&self, request: &TtsRequest) -> Result<AsyncTask> {
-        // Use async endpoint
-        let url = format!("{}/async/audio/speech", self.base_url);
+        // Check which endpoint to use based on input field
+        // MegaTTS3 uses sync /v1/audio/speech with "input"
+        // IndexTTS-2 uses async /v1/async/audio/speech with "inputs"
+        let (url, use_sync) = if request.input.is_some() {
+            (format!("{}/audio/speech", self.base_url), true)
+        } else {
+            (format!("{}/async/audio/speech", self.base_url), false)
+        };
         
         // Build payload
         let mut payload_map: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
         payload_map.insert("model".to_string(), serde_json::Value::String(request.model.clone()));
-        payload_map.insert("inputs".to_string(), serde_json::Value::String(request.inputs.clone()));
+        
+        if use_sync {
+            // Sync endpoint uses "input"
+            if let Some(ref input) = request.input {
+                payload_map.insert("input".to_string(), serde_json::Value::String(input.clone()));
+            }
+        } else {
+            // Async endpoint uses "inputs"
+            if let Some(ref inputs) = request.inputs {
+                payload_map.insert("inputs".to_string(), serde_json::Value::String(inputs.clone()));
+            } else if let Some(ref input) = request.input {
+                payload_map.insert("inputs".to_string(), serde_json::Value::String(input.clone()));
+            }
+        }
         
         if let Some(ref pt) = request.prompt_text {
             if !pt.is_empty() {
@@ -318,6 +337,17 @@ impl MoarkClient {
             if !pau.is_empty() {
                 payload_map.insert("prompt_audio_url".to_string(), serde_json::Value::String(pau.clone()));
             }
+        }
+        if let Some(ref pl) = request.prompt_language {
+            if !pl.is_empty() {
+                payload_map.insert("prompt_language".to_string(), serde_json::Value::String(pl.clone()));
+            }
+        }
+        if let Some(iw) = request.intelligibility_weight {
+            payload_map.insert("intelligibility_weight".to_string(), serde_json::json!(iw));
+        }
+        if let Some(sw) = request.similarity_weight {
+            payload_map.insert("similarity_weight".to_string(), serde_json::json!(sw));
         }
         
         let payload = serde_json::Value::Object(payload_map);
@@ -343,9 +373,23 @@ impl MoarkClient {
             return Err(MoarkError::ApiError(format!("Status: {}, Error: {}", status, error_text)));
         }
 
-        let result: AsyncTask = response.json().await?;
-        
-        Ok(result)
+        if use_sync {
+            // For sync endpoint, wrap result in AsyncTask-like format
+            let result: serde_json::Value = response.json().await?;
+            let task_id = format!("sync_{}", chrono::Utc::now().timestamp_millis());
+            Ok(AsyncTask {
+                task_id,
+                status: "completed".to_string(),
+                created_at: None,
+                started_at: None,
+                completed_at: None,
+                output: Some(result),
+                urls: None,
+            })
+        } else {
+            let result: AsyncTask = response.json().await?;
+            Ok(result)
+        }
     }
 
     #[allow(dead_code)]

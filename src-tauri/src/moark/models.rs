@@ -283,27 +283,45 @@ pub struct SearchVideoResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TtsRequest {
     pub model: String,
-    pub inputs: String,
+    // For sync endpoint: "input", for async: "inputs"
+    pub input: Option<String>,
+    pub inputs: Option<String>,
     #[serde(rename = "prompt_text")]
     pub prompt_text: Option<String>,
     #[serde(rename = "prompt_audio_url")]
     pub prompt_audio_url: Option<String>,
+    #[serde(rename = "prompt_language")]
+    pub prompt_language: Option<String>,
+    #[serde(rename = "intelligibility_weight")]
+    pub intelligibility_weight: Option<f32>,
+    #[serde(rename = "similarity_weight")]
+    pub similarity_weight: Option<f32>,
     pub gender: Option<String>,
     pub pitch: Option<i32>,
     pub speed: Option<i32>,
 }
 
 impl TtsRequest {
-    pub fn new(model: impl Into<String>, inputs: impl Into<String>) -> Self {
+    pub fn new(model: impl Into<String>, text: impl Into<String>) -> Self {
         Self {
             model: model.into(),
-            inputs: inputs.into(),
+            input: Some(text.into()),
+            inputs: None,
             prompt_text: None,
             prompt_audio_url: None,
+            prompt_language: None,
+            intelligibility_weight: None,
+            similarity_weight: None,
             gender: None,
             pitch: None,
             speed: None,
         }
+    }
+
+    pub fn with_inputs(mut self, inputs: impl Into<String>) -> Self {
+        self.inputs = Some(inputs.into());
+        self.input = None;
+        self
     }
 
     pub fn with_prompt_text(mut self, prompt_text: impl Into<String>) -> Self {
