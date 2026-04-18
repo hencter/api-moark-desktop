@@ -283,43 +283,27 @@ pub struct SearchVideoResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TtsRequest {
     pub model: String,
-    #[serde(rename = "input")]
-    pub input: String,
+    pub inputs: String,
     #[serde(rename = "prompt_text")]
     pub prompt_text: Option<String>,
     #[serde(rename = "prompt_audio_url")]
     pub prompt_audio_url: Option<String>,
-    #[serde(rename = "emo_audio_prompt_url")]
-    pub emo_audio_prompt_url: Option<String>,
-    pub emo_alpha: Option<f32>,
     pub gender: Option<String>,
     pub pitch: Option<i32>,
     pub speed: Option<i32>,
 }
 
 impl TtsRequest {
-    pub fn new(model: impl Into<String>, input: impl Into<String>) -> Self {
+    pub fn new(model: impl Into<String>, inputs: impl Into<String>) -> Self {
         Self {
             model: model.into(),
-            input: input.into(),
+            inputs: inputs.into(),
             prompt_text: None,
             prompt_audio_url: None,
-            emo_audio_prompt_url: None,
-            emo_alpha: None,
             gender: None,
             pitch: None,
             speed: None,
         }
-    }
-
-    pub fn with_emo_audio_prompt_url(mut self, url: impl Into<String>) -> Self {
-        self.emo_audio_prompt_url = Some(url.into());
-        self
-    }
-
-    pub fn with_emo_alpha(mut self, alpha: f32) -> Self {
-        self.emo_alpha = Some(alpha);
-        self
     }
 
     pub fn with_prompt_text(mut self, prompt_text: impl Into<String>) -> Self {

@@ -305,7 +305,7 @@ impl MoarkClient {
         
         let mut payload_map: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
         payload_map.insert("model".to_string(), serde_json::Value::String(request.model.clone()));
-        payload_map.insert("input".to_string(), serde_json::Value::String(request.input.clone()));
+        payload_map.insert("inputs".to_string(), serde_json::Value::String(request.inputs.clone()));
         
         if request.prompt_text.is_some() {
             payload_map.insert("prompt_text".to_string(), serde_json::Value::String(request.prompt_text.clone().unwrap()));

@@ -275,7 +275,7 @@ export default function VoiceClonePage() {
       const result = await invoke<AsyncTaskResult>("text_to_speech", {
         params: {
           model: ttsModel,
-          input: ttsInput,
+          inputs: ttsInput,
           prompt_text: undefined,
           prompt_audio_url: ttsPromptAudio || undefined,
           emo_audio_prompt_url: undefined,
