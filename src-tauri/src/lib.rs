@@ -10,6 +10,7 @@ pub fn run() {
     let app_state = AppState {
         moark_client: Arc::new(Mutex::new(None)),
         project_path: Arc::new(Mutex::new(None)),
+        api_token: Arc::new(Mutex::new(None)),
     };
 
     tauri::Builder::default()
@@ -29,13 +30,21 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::set_api_token,
             commands::chat,
+            commands::ping,
+            commands::list_models,
             commands::test_connection,
             commands::get_connection_status,
             commands::set_project_path,
             commands::get_project_path,
             commands::extract_voice_feature,
             commands::start_voice_clone,
-            commands::save_temp_file
+            commands::save_temp_file,
+            commands::text_to_speech,
+            commands::web_search,
+            commands::get_task_status,
+            commands::cancel_task,
+            commands::set_global_api_token,
+            commands::get_global_api_token
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

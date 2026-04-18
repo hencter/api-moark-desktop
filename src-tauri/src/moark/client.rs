@@ -6,7 +6,7 @@ use serde_json::Value;
 use thiserror::Error;
 use futures_util::StreamExt;
 
-use super::models::{ChatRequest, ChatResponse, ImageRequest, ImageResponse, AsyncTask, VoiceCloneRequest, TtsRequest, WebSearchRequest, WebSearchResponse};
+use super::models::{ChatRequest, ChatResponse, ImageRequest, ImageResponse, AsyncTask, VoiceCloneRequest, TtsRequest, WebSearchRequest, WebSearchResponse, ModelsList};
 
 pub const BASE_URL: &str = "https://ai.gitee.com/v1";
 
@@ -213,6 +213,47 @@ impl MoarkClient {
 
         let bytes = response.bytes().await?.to_vec();
         Ok(bytes)
+    }
+
+    pub async fn ping(&self) -> Result<String> {
+        let url = format!("{}/", self.base_url);
+        
+        let response = self.client
+            .get(&url)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(MoarkError::ApiError(format!("Ping failed: {}", response.status())));
+        }
+
+        let text = response.text().await?;
+        if text == "Ready!" {
+            Ok(text)
+        } else {
+            Err(MoarkError::ApiError(format!("Unexpected ping response: {}", text)))
+        }
+    }
+
+    pub async fn list_models(&self) -> Result<ModelsList> {
+        let url = format!("{}/models", self.base_url);
+        
+        let response = self.client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(MoarkError::ApiError(format!("Status: {}, Error: {}", status, error_text)));
+        }
+
+        let result: Value = response.json().await?;
+        
+        serde_json::from_value(result)
+            .map_err(|e| MoarkError::ParseError(e.to_string()))
     }
 
     pub async fn get_async_task(&self, task_id: &str) -> Result<AsyncTask> {

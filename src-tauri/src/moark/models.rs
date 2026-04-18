@@ -332,3 +332,19 @@ impl TtsRequest {
         self
     }
 }
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelInfo {
+    pub id: Option<String>,
+    pub object: Option<String>,
+    pub owned_by: Option<String>,
+    pub permissions: Option<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelsList {
+    pub object: Option<String>,
+    pub data: Option<Vec<ModelInfo>>,
+}
