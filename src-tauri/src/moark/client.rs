@@ -314,11 +314,10 @@ impl MoarkClient {
             payload_map.insert("prompt_audio_url".to_string(), serde_json::Value::String(request.prompt_audio_url.clone().unwrap()));
         }
         
+        eprintln!("[DEBUG] TTS URL: {}", url);
         eprintln!("[DEBUG] TTS payload: {}", serde_json::Value::Object(payload_map.clone()));
         
         let payload = serde_json::Value::Object(payload_map);
-        
-        println!("[DEBUG] TTS payload: {:?}", payload);
         
         let response = self.client
             .post(&url)
@@ -329,6 +328,8 @@ impl MoarkClient {
             .send()
             .await?;
 
+        eprintln!("[DEBUG] TTS response status: {}", response.status());
+        
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
