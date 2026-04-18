@@ -6,7 +6,7 @@ use serde_json::Value;
 use thiserror::Error;
 use futures_util::StreamExt;
 
-use super::models::{ChatRequest, ChatResponse, ImageRequest, ImageResponse, AsyncTask, VoiceCloneRequest, TtsRequest, TtsSyncResponse, WebSearchRequest, WebSearchResponse, ModelsList};
+use super::models::{ChatRequest, ChatResponse, ImageRequest, ImageResponse, AsyncTask, VoiceCloneRequest, TtsRequest, WebSearchRequest, WebSearchResponse, ModelsList};
 
 pub const BASE_URL: &str = "https://ai.gitee.com/v1";
 
@@ -300,15 +300,27 @@ impl MoarkClient {
             .map_err(|e| MoarkError::ParseError(e.to_string()))
     }
 
-    pub async fn text_to_speech(&self, request: &TtsRequest) -> Result<TtsSyncResponse> {
-        // Use sync endpoint /v1/audio/speech (not async)
-        let url = format!("{}/audio/speech", self.base_url);
+    pub async fn text_to_speech(&self, request: &TtsRequest) -> Result<AsyncTask> {
+        // Use async endpoint
+        let url = format!("{}/async/audio/speech", self.base_url);
         
-        // Sync endpoint uses "input" (singular), not "inputs" (plural)
-        let payload = serde_json::json!({
-            "model": request.model,
-            "input": request.inputs  // Note: singular "input" for sync endpoint
-        });
+        // Build payload
+        let mut payload_map: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
+        payload_map.insert("model".to_string(), serde_json::Value::String(request.model.clone()));
+        payload_map.insert("inputs".to_string(), serde_json::Value::String(request.inputs.clone()));
+        
+        if let Some(ref pt) = request.prompt_text {
+            if !pt.is_empty() {
+                payload_map.insert("prompt_text".to_string(), serde_json::Value::String(pt.clone()));
+            }
+        }
+        if let Some(ref pau) = request.prompt_audio_url {
+            if !pau.is_empty() {
+                payload_map.insert("prompt_audio_url".to_string(), serde_json::Value::String(pau.clone()));
+            }
+        }
+        
+        let payload = serde_json::Value::Object(payload_map);
         
         eprintln!("[DEBUG] TTS URL: {}", url);
         eprintln!("[DEBUG] TTS payload: {}", payload);
@@ -331,7 +343,7 @@ impl MoarkClient {
             return Err(MoarkError::ApiError(format!("Status: {}, Error: {}", status, error_text)));
         }
 
-        let result: TtsSyncResponse = response.json().await?;
+        let result: AsyncTask = response.json().await?;
         
         Ok(result)
     }
